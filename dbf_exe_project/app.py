@@ -17,6 +17,7 @@ DATA_DIR = resource_path("data")
 def resolve_data_file(fname: str) -> str:
     """
     Busca el archivo de datos en varios lugares, en este orden:
+    0) FUEL_DB_DIR si está definido en el entorno
     1) <MEIPASS>/data/fname  (recursos embebidos si existieran)
     2) <EXE_DIR>/data/fname  (carpeta 'data' junto al .exe)
     3) <EXE_DIR>/fname       (DBF directamente al lado del .exe)  ← recomendado por el usuario
@@ -24,6 +25,13 @@ def resolve_data_file(fname: str) -> str:
     5) <CWD>/fname           (DBF directamente en el directorio actual)
     Retorna la primera ruta existente o, si ninguna existe, el path de <MEIPASS>/data/fname (para mensajes de error).
     """
+    # 0) Directorio forzado por variable de entorno
+    env_dir = os.environ.get('FUEL_DB_DIR')
+    if env_dir:
+        p = os.path.join(env_dir, fname)
+        if os.path.exists(p):
+            return p
+
     # 1) MEIPASS/data
     candidate = os.path.join(DATA_DIR, fname)
     if os.path.exists(candidate):
@@ -110,9 +118,10 @@ def api_table(name):
     if name not in ENDPOINTS:
         return jsonify({"error": f"Tabla '{name}' no está definida.", "available": list(ENDPOINTS.keys())}), 404
     fname = ENDPOINTS[name]
-    fpath = os.path.join(DATA_DIR, fname)
-    if not os.path.exists(fpath):
-        return jsonify({"error": f"No se encontró el archivo {fname} en la carpeta 'data'."}), 404
+    fpath = resolve_data_file(fname)
+    exists = os.path.exists(fpath)
+    if not exists:
+        return jsonify({"error": f"No se encontró el archivo {fname}.", "resolved_path": fpath, "exists": False}), 404
 
     limit = request.args.get("limit", type=int)
     fields_param = request.args.get("fields")
@@ -130,7 +139,9 @@ def api_table(name):
         rows = read_dbf(fpath, limit=limit)
         rows = [{(k.lower() if isinstance(k, str) else k): v for k, v in r.items()} for r in rows]
         rows = filter_rows(rows, fields=fields, q=q, where=where)
-        return jsonify({"table": name, "file": fname, "count": len(rows), "rows": rows})
+        return jsonify({"table": name, "file": fname, "resolved_path": fpath, "exists": True, "count": len(rows), "rows": rows})
+    except Exception as e:
+        return jsonify({"error": str(e), "resolved_path": fpath, "exists": True}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -276,7 +287,23 @@ def open_browser_when_ready(port=5000):
         except Exception: pass
     threading.Timer(0.8, _open).start()
 
+
+
+@app.get("/api/where")
+def api_where():
+    out = {}
+    for key, fname in ENDPOINTS.items():
+        path = resolve_data_file(fname)
+        out[key] = {
+            "file": fname,
+            "resolved_path": path,
+            "exists": os.path.exists(path),
+            "size_bytes": (os.path.getsize(path) if os.path.exists(path) else 0),
+        }
+    return jsonify(out)
+
 if __name__ == "__main__":
+
     port = int(os.environ.get("PORT", "5000"))
     open_browser_when_ready(port)
     app.run(host="127.0.0.1", port=port, debug=False)
