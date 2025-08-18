@@ -14,6 +14,37 @@ TEMPLATES_DIR = resource_path("templates")
 STATIC_DIR = resource_path("static")
 DATA_DIR = resource_path("data")
 
+def resolve_data_file(fname: str) -> str:
+    """
+    Busca el archivo de datos en varios lugares, en este orden:
+    1) <MEIPASS>/data/fname  (recursos embebidos si existieran)
+    2) <EXE_DIR>/data/fname  (carpeta 'data' junto al .exe)
+    3) <EXE_DIR>/fname       (DBF directamente al lado del .exe)  ← recomendado por el usuario
+    4) <CWD>/data/fname      (carpeta 'data' en el directorio actual)
+    5) <CWD>/fname           (DBF directamente en el directorio actual)
+    Retorna la primera ruta existente o, si ninguna existe, el path de <MEIPASS>/data/fname (para mensajes de error).
+    """
+    # 1) MEIPASS/data
+    candidate = os.path.join(DATA_DIR, fname)
+    if os.path.exists(candidate):
+        return candidate
+
+    # 2, 3) Junto al ejecutable
+    exe_dir = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.abspath('.')
+    for p in (os.path.join(exe_dir, 'data', fname), os.path.join(exe_dir, fname)):
+        if os.path.exists(p):
+            return p
+
+    # 4, 5) Directorio actual
+    cwd = os.getcwd()
+    for p in (os.path.join(cwd, 'data', fname), os.path.join(cwd, fname)):
+        if os.path.exists(p):
+            return p
+
+    # Devuelve la primera opción por defecto (para mensajes)
+    return candidate
+
+
 app = Flask(__name__, template_folder=TEMPLATES_DIR, static_folder=STATIC_DIR)
 app.wsgi_app = ProxyFix(app.wsgi_app)
 
@@ -182,7 +213,7 @@ def read_last_readings_per_tank(dbf_path, tanque_value=None, n=10):
 def api_calibraciones_ultimas():
     tanque = request.args.get("tanque")
     n = request.args.get("n", default=10, type=int)
-    fpath = os.path.join(DATA_DIR, ENDPOINTS["calibraciones"])
+    fpath = resolve_data_file(ENDPOINTS["calibraciones"])
     if not os.path.exists(fpath):
         return jsonify({"error":"No se encontró FFCALA.DBF"}), 404
     rows, tkey, last_ts = read_last_readings_per_tank(fpath, tanque_value=tanque, n=n)
@@ -200,7 +231,7 @@ def sse_calibraciones():
     tanque = request.args.get("tanque")
     n = request.args.get("n", default=10, type=int)
     interval = request.args.get("interval", default=2, type=int)
-    fpath = os.path.join(DATA_DIR, ENDPOINTS["calibraciones"])
+    fpath = resolve_data_file(ENDPOINTS["calibraciones"])
     if not os.path.exists(fpath):
         return jsonify({"error":"No se encontró FFCALA.DBF"}), 404
 
