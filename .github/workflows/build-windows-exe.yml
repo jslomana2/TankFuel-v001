@@ -9,6 +9,7 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,7 +25,9 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      # 👇 OBLIGATORIO: usar shell cmd para que funcionen los ^ de continuación
       - name: Build EXE with PyInstaller
+        shell: cmd
         run: |
           pyinstaller --noconfirm --clean --name app --onefile ^
             --add-data "templates;templates" ^
@@ -35,4 +38,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-exe
-          path: dist/app/app.exe
+          path: dist\app\app.exe
