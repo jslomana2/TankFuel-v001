@@ -115,8 +115,11 @@ def api_tables():
 
 @app.get("/api/<name>")
 def api_table(name):
+    # Resolver alias -> canónico
+    if name in ALIASES:
+        name = ALIASES[name]
     if name not in ENDPOINTS:
-        return jsonify({"error": f"Tabla '{name}' no está definida.", "available": list(ENDPOINTS.keys())}), 404
+        return jsonify({"error": f"Tabla '{name}' no está definida.", "available": list(ENDPOINTS.keys()), "aliases": list(ALIASES.keys())}), 404
     fname = ENDPOINTS[name]
     fpath = resolve_data_file(fname)
     exists = os.path.exists(fpath)
@@ -316,3 +319,35 @@ def favicon():
     if os.path.exists(fav_path):
         return send_from_directory(STATIC_DIR, 'favicon.ico')
     return ('', 204)
+
+
+# Alias de rutas -> clave canónica de ENDPOINTS
+ALIASES = {
+    # FFCALA.DBF
+    "calados": "calibraciones",
+    "lecturas": "calibraciones",
+    "calibraciones": "calibraciones",
+    "cala": "calibraciones",
+    # FFTANQ.DBF
+    "tanque": "tanques",
+    "tanques": "tanques",
+    # FFALMA.DBF
+    "almacen": "almacenes",
+    "almacenes": "almacenes",
+    # FFARTI.DBF
+    "articulo": "articulos",
+    "articulos": "articulos",
+}
+
+
+
+# Rutas alias para "calibraciones"
+@app.get("/api/calados/ultimas")
+@app.get("/api/lecturas/ultimas")
+def api_calibraciones_ultimas_alias():
+    return api_calibraciones_ultimas()
+
+@app.get("/api/stream/calados")
+@app.get("/api/stream/lecturas")
+def sse_calibraciones_alias():
+    return sse_calibraciones()
