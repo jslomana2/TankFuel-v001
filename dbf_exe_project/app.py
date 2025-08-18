@@ -6,12 +6,29 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory, render_template, Response
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-def resource_path(*parts):
-    base_path = getattr(sys, "_MEIPASS", os.path.abspath("."))
-    return os.path.join(base_path, *parts)
+def resource_path_multi(subdir: str) -> str:
+    """
+    Busca 'subdir' (templates/static) en:
+    1) MEIPASS (si está embebido)
+    2) EXE_DIR (carpeta junto al .exe)
+    3) CWD (directorio actual)
+    Retorna la primera ruta existente; si ninguna existe, devuelve la de MEIPASS/CWD por defecto.
+    """
+    bases = []
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass: bases.append(meipass)
+    if getattr(sys, "frozen", False):
+        bases.append(os.path.dirname(sys.executable))  # exe dir
+    bases.append(os.path.abspath("."))  # cwd
+    for b in bases:
+        p = os.path.join(b, subdir)
+        if os.path.exists(p):
+            return p
+    # fallback
+    return os.path.join(meipass or os.path.abspath("."), subdir)
 
-TEMPLATES_DIR = resource_path("templates")
-STATIC_DIR = resource_path("static")
+TEMPLATES_DIR = resource_path_multi("templates")
+STATIC_DIR = resource_path_multi("static")
 DATA_DIR = resource_path("data")
 
 app = Flask(__name__, template_folder=TEMPLATES_DIR, static_folder=STATIC_DIR)
@@ -398,3 +415,19 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5000"))
     open_browser_when_ready(port)
     app.run(host="127.0.0.1", port=port, debug=False)
+
+
+@app.get("/debug/static")
+def debug_static():
+    return jsonify({
+        "templates_dir": TEMPLATES_DIR,
+        "static_dir": STATIC_DIR,
+        "exists_templates": os.path.exists(TEMPLATES_DIR),
+        "exists_static": os.path.exists(STATIC_DIR),
+        "ls_templates": (os.listdir(TEMPLATES_DIR) if os.path.exists(TEMPLATES_DIR) else []),
+        "ls_static": (os.listdir(STATIC_DIR) if os.path.exists(STATIC_DIR) else []),
+    })
+
+@app.get("/health")
+def health():
+    return jsonify({"ok": True})
