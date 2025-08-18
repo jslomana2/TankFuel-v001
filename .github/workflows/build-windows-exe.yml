@@ -10,6 +10,12 @@ jobs:
   build-windows:
     runs-on: windows-latest
 
+    # Ejecuta todos los "run:" dentro de la carpeta del proyecto y en cmd (para que funcionen los ^)
+    defaults:
+      run:
+        shell: cmd
+        working-directory: dbf_exe_project
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,15 +25,18 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Show files (debug)
+        run: |
+          echo Contenido de dbf_exe_project:
+          dir
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
 
-      # 👇 OBLIGATORIO: usar shell cmd para que funcionen los ^ de continuación
       - name: Build EXE with PyInstaller
-        shell: cmd
         run: |
           pyinstaller --noconfirm --clean --name app --onefile ^
             --add-data "templates;templates" ^
@@ -38,4 +47,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-exe
-          path: dist\app\app.exe
+          path: dbf_exe_project\dist\app\app.exe
