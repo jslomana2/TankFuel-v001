@@ -10,7 +10,7 @@ jobs:
   build-windows:
     runs-on: windows-latest
 
-    # Ejecuta todos los "run:" dentro de la carpeta del proyecto y en cmd (para que funcionen los ^)
+    # Para los "run:" usa cmd y trabaja dentro de la carpeta del proyecto
     defaults:
       run:
         shell: cmd
@@ -25,10 +25,11 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Show files (debug)
+      - name: Show project files (debug)
         run: |
-          echo Contenido de dbf_exe_project:
+          echo ==== contenido de dbf_exe_project ====
           dir
+          echo ==== fin contenido ====
 
       - name: Install dependencies
         run: |
@@ -43,8 +44,18 @@ jobs:
             --add-data "static;static" ^
             app.py
 
+      - name: List dist (debug)
+        run: |
+          echo ==== contenido de dist ====
+          dir dist
+          echo ==== fin contenido ====
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-exe
-          path: dbf_exe_project\dist\app\app.exe
+          # OJO: rutas relativas a la RAÍZ del repo
+          path: |
+            dbf_exe_project\dist\app.exe
+            dbf_exe_project\dist\app\app.exe
+          if-no-files-found: error
