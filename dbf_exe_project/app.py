@@ -14,45 +14,6 @@ TEMPLATES_DIR = resource_path("templates")
 STATIC_DIR = resource_path("static")
 DATA_DIR = resource_path("data")
 
-def resolve_data_file(fname: str) -> str:
-    """
-    Busca el archivo de datos en varios lugares, en este orden:
-    0) FUEL_DB_DIR si está definido en el entorno
-    1) <MEIPASS>/data/fname  (recursos embebidos si existieran)
-    2) <EXE_DIR>/data/fname  (carpeta 'data' junto al .exe)
-    3) <EXE_DIR>/fname       (DBF directamente al lado del .exe)  ← recomendado por el usuario
-    4) <CWD>/data/fname      (carpeta 'data' en el directorio actual)
-    5) <CWD>/fname           (DBF directamente en el directorio actual)
-    Retorna la primera ruta existente o, si ninguna existe, el path de <MEIPASS>/data/fname (para mensajes de error).
-    """
-    # 0) Directorio forzado por variable de entorno
-    env_dir = os.environ.get('FUEL_DB_DIR')
-    if env_dir:
-        p = os.path.join(env_dir, fname)
-        if os.path.exists(p):
-            return p
-
-    # 1) MEIPASS/data
-    candidate = os.path.join(DATA_DIR, fname)
-    if os.path.exists(candidate):
-        return candidate
-
-    # 2, 3) Junto al ejecutable
-    exe_dir = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.abspath('.')
-    for p in (os.path.join(exe_dir, 'data', fname), os.path.join(exe_dir, fname)):
-        if os.path.exists(p):
-            return p
-
-    # 4, 5) Directorio actual
-    cwd = os.getcwd()
-    for p in (os.path.join(cwd, 'data', fname), os.path.join(cwd, fname)):
-        if os.path.exists(p):
-            return p
-
-    # Devuelve la primera opción por defecto (para mensajes)
-    return candidate
-
-
 app = Flask(__name__, template_folder=TEMPLATES_DIR, static_folder=STATIC_DIR)
 app.wsgi_app = ProxyFix(app.wsgi_app)
 
@@ -64,7 +25,7 @@ def _import_dbfread():
         raise RuntimeError("No se pudo importar 'dbfread'. Instala dependencias con 'pip install -r requirements.txt'.")
 
 def read_dbf(file_path, encoding="latin-1", lower_names=True, limit=None):
-    DBF = _import_dbfread()
+    from dbfread import DBF  # lazy import para evitar fallo de import en tooling
     table = DBF(file_path, load=True, encoding=encoding, lowernames=lower_names)
     rows = [dict(r) for r in table]
     if limit is not None:
@@ -78,17 +39,46 @@ ENDPOINTS = {
     "calibraciones": "FFCALA.DBF",
 }
 
-def available_tables():
-    out = []
-    for key, fname in ENDPOINTS.items():
-        fpath = os.path.join(DATA_DIR, fname)
-        out.append({
-            "name": key,
-            "file": fname,
-            "exists": os.path.exists(fpath),
-            "size_bytes": os.path.getsize(fpath) if os.path.exists(fpath) else 0
-        })
-    return out
+# Alias de rutas -> clave canónica de ENDPOINTS
+ALIASES = {
+    "calados": "calibraciones",
+    "lecturas": "calibraciones",
+    "calibraciones": "calibraciones",
+    "tanque": "tanques",
+    "tanques": "tanques",
+    "almacen": "almacenes",
+    "almacenes": "almacenes",
+    "articulo": "articulos",
+    "articulos": "articulos",
+}
+
+def resolve_data_file(fname: str) -> str:
+    """
+    Busca el archivo de datos en varios lugares, en este orden:
+    0) FUEL_DB_DIR si está definido en el entorno
+    1) <MEIPASS>/data/fname  (recursos embebidos si existieran)
+    2) <EXE_DIR>/data/fname  (carpeta 'data' junto al .exe)
+    3) <EXE_DIR>/fname       (DBF directamente al lado del .exe)
+    4) <CWD>/data/fname      (carpeta 'data' en el directorio actual)
+    5) <CWD>/fname           (DBF directamente en el directorio actual)
+    """
+    env_dir = os.environ.get('FUEL_DB_DIR')
+    if env_dir:
+        p = os.path.join(env_dir, fname)
+        if os.path.exists(p):
+            return p
+    candidate = os.path.join(DATA_DIR, fname)
+    if os.path.exists(candidate):
+        return candidate
+    exe_dir = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.abspath('.')
+    for p in (os.path.join(exe_dir, 'data', fname), os.path.join(exe_dir, fname)):
+        if os.path.exists(p):
+            return p
+    cwd = os.getcwd()
+    for p in (os.path.join(cwd, 'data', fname), os.path.join(cwd, fname)):
+        if os.path.exists(p):
+            return p
+    return candidate
 
 def filter_rows(rows, fields=None, q=None, where=None):
     if where:
@@ -109,46 +99,50 @@ def filter_rows(rows, fields=None, q=None, where=None):
         rows = [{k: r.get(k) for k in fields} for r in rows]
     return rows
 
-@app.get("/api/tables")
-def api_tables():
-    return jsonify(available_tables())
-
-@app.get("/api/<name>")
-def api_table(name):
-    # Resolver alias -> canónico
-    if name in ALIASES:
-        name = ALIASES[name]
-    if name not in ENDPOINTS:
-        return jsonify({"error": f"Tabla '{name}' no está definida.", "available": list(ENDPOINTS.keys()), "aliases": list(ALIASES.keys())}), 404
-    fname = ENDPOINTS[name]
-    fpath = resolve_data_file(fname)
-    exists = os.path.exists(fpath)
-    if not exists:
-        return jsonify({"error": f"No se encontró el archivo {fname}.", "resolved_path": fpath, "exists": False}), 404
-
-    limit = request.args.get("limit", type=int)
-    fields_param = request.args.get("fields")
-    fields = [f.strip().lower() for f in fields_param.split(",")] if fields_param else None
-    q = request.args.get("q")
-    where_param = request.args.get("where")
-    where = None
-    if where_param:
-        try:
-            where = json.loads(where_param)
-        except Exception:
-            return jsonify({"error": "El parámetro 'where' debe ser JSON válido"}), 400
-
+def color_decimal_to_hex(n, assume_bgr=True):
     try:
-        rows = read_dbf(fpath, limit=limit)
-        rows = [{(k.lower() if isinstance(k, str) else k): v for k, v in r.items()} for r in rows]
-        rows = filter_rows(rows, fields=fields, q=q, where=where)
-        return jsonify({"table": name, "file": fname, "resolved_path": fpath, "exists": True, "count": len(rows), "rows": rows})
-    except Exception as e:
-        return jsonify({"error": str(e), "resolved_path": fpath, "exists": True}), 500
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        n = int(n)
+    except Exception:
+        return None
+    r = (n & 0xFF)
+    g = (n >> 8) & 0xFF
+    b = (n >> 16) & 0xFF
+    if assume_bgr:
+        r, b = b, r
+    return f"#{r:02X}{g:02X}{b:02X}"
 
-# ---- Últimas lecturas y SSE ----
+def _load_table_dict(dbf_name):
+    path = resolve_data_file(dbf_name)
+    rows = []
+    if os.path.exists(path):
+        rows = read_dbf(path)
+        rows = [{(k.lower() if isinstance(k,str) else k): v for k,v in r.items()} for r in rows]
+    return rows, path
+
+def resolve_product_details(almacen_code, articulo_code):
+    # 1) FFALMA por (almacen_code, articulo_code) si existiera
+    alma_rows, _ = _load_table_dict(ENDPOINTS["almacenes"])
+    if alma_rows:
+        for r in alma_rows:
+            if r.get("codigo") == almacen_code or r.get("almacen") == almacen_code:
+                art = r.get("articulo") or r.get("codart") or r.get("producto") or None
+                if art and str(art).strip() == str(articulo_code).strip():
+                    name = r.get("descri") or r.get("nombre") or None
+                    color_dec = r.get("colorprodu") or r.get("color") or None
+                    color_hex = color_decimal_to_hex(color_dec) if color_dec is not None else None
+                    if name or color_hex:
+                        return {"product_name": name, "product_color_hex": color_hex}
+    # 2) FFARTI por CODIGO
+    arti_rows, _ = _load_table_dict(ENDPOINTS["articulos"])
+    if arti_rows:
+        for r in arti_rows:
+            if str(r.get("codigo")).strip() == str(articulo_code).strip():
+                name = r.get("descri") or r.get("nombre") or None
+                color_dec = r.get("colorprodu") or r.get("color") or None
+                color_hex = color_decimal_to_hex(color_dec) if color_dec is not None else None
+                return {"product_name": name, "product_color_hex": color_hex}
+    return {"product_name": None, "product_color_hex": None}
+
 def _find_field(candidates, keys_lower):
     for c in candidates:
         if c in keys_lower:
@@ -209,33 +203,128 @@ def _sort_by_dt(rows):
     decorated.sort(key=lambda x: (x[0] is None, x[0]))
     return [r for _, r in decorated]
 
-def read_last_readings_per_tank(dbf_path, tanque_value=None, n=10):
-    rows = read_dbf(dbf_path)
+def parse_tanque_selector(req):
+    tid = req.args.get("tanque_id") or req.args.get("id") or None
+    tanque = req.args.get("tanque")
+    almacen = req.args.get("almacen")
+    if tid and "-" in tid:
+        a, c = tid.split("-", 1)
+        return a.strip(), c.strip()
+    if tanque and almacen:
+        return str(almacen).strip(), str(tanque).strip()
+    if tanque and "-" in tanque:
+        a, c = tanque.split("-", 1)
+        return a.strip(), c.strip()
+    return None, None
+
+@app.get("/api/tables")
+def api_tables():
+    return jsonify([{"name": k, "file": v} for k, v in ENDPOINTS.items()])
+
+@app.get("/api/<name>")
+def api_table(name):
+    if name in ALIASES:
+        name = ALIASES[name]
+    if name not in ENDPOINTS:
+        return jsonify({"error": f"Tabla '{name}' no está definida.", "available": list(ENDPOINTS.keys()), "aliases": list(ALIASES.keys())}), 404
+    fname = ENDPOINTS[name]
+    fpath = resolve_data_file(fname)
+    exists = os.path.exists(fpath)
+    if not exists:
+        return jsonify({"error": f"No se encontró el archivo {fname}.", "resolved_path": fpath, "exists": False}), 404
+
+    limit = request.args.get("limit", type=int)
+    fields_param = request.args.get("fields")
+    fields = [f.strip().lower() for f in fields_param.split(",")] if fields_param else None
+    q = request.args.get("q")
+    where_param = request.args.get("where")
+    where = None
+    if where_param:
+        try:
+            where = json.loads(where_param)
+        except Exception:
+            return jsonify({"error": "El parámetro 'where' debe ser JSON válido"}), 400
+
+    try:
+        rows = read_dbf(fpath, limit=limit)
+        rows = [{(k.lower() if isinstance(k, str) else k): v for k, v in r.items()} for r in rows]
+        rows = filter_rows(rows, fields=fields, q=q, where=where)
+        return jsonify({"table": name, "file": fname, "resolved_path": fpath, "exists": True, "count": len(rows), "rows": rows})
+    except Exception as e:
+        return jsonify({"error": str(e), "resolved_path": fpath, "exists": True}), 500
+
+@app.get("/api/tanques_norm")
+def api_tanques_norm():
+    fpath = resolve_data_file(ENDPOINTS["tanques"])
+    if not os.path.exists(fpath):
+        return jsonify({"error": "No se encontró FFTANQ.DBF", "resolved_path": fpath}), 404
+    rows = read_dbf(fpath)
     rows = [{(k.lower() if isinstance(k,str) else k): v for k,v in r.items()} for r in rows]
-    tkey = _infer_tanque_key(rows)
-    if tkey and tanque_value is not None:
-        rows = [r for r in rows if str(r.get(tkey, "")).strip() == str(tanque_value).strip()]
-    rows = _sort_by_dt(rows)
-    if n is not None:
-        rows = rows[-int(n):]
-    # añade un campo last_ts formateado si es posible
-    last_dt = _to_datetime(rows[-1]) if rows else None
-    last_ts = last_dt.strftime("%Y-%m-%d %H:%M") if last_dt else None
-    return rows, tkey, last_ts
+
+    out = []
+    for r in rows:
+        alm = str(r.get("almacen") or r.get("codalmacen") or "").strip()
+        cod = str(r.get("codigo") or r.get("codtanque") or r.get("tanques") or "").strip()
+        if not alm or not cod:
+            continue
+        tanque_id = f"{alm}-{cod}"
+        descri = r.get("descri") or r.get("descripcion") or None
+        cap = r.get("capacidad")
+        stock = r.get("stock")
+        stock15 = r.get("stock15")
+        art = r.get("articulo")
+        tempult = r.get("tempult")
+
+        prod = resolve_product_details(alm, art) if art is not None else {"product_name": None, "product_color_hex": None}
+
+        out.append({
+            "tanque_id": tanque_id,
+            "almacen_id": alm,
+            "tanque_codigo": cod,
+            "descripcion": descri,
+            "capacidad_l": cap,
+            "stock_l": stock,
+            "stock15_l": stock15,
+            "producto_id": art,
+            "producto_nombre": prod.get("product_name"),
+            "producto_color": prod.get("product_color_hex"),
+            "temp_ultima_c": tempult,
+        })
+    return jsonify({"table": "tanques", "file": ENDPOINTS["tanques"], "resolved_path": fpath, "count": len(out), "rows": out})
 
 @app.get("/api/calibraciones/ultimas")
 def api_calibraciones_ultimas():
-    tanque = request.args.get("tanque")
     n = request.args.get("n", default=10, type=int)
+    almacen_code, tanque_code = parse_tanque_selector(request)
+    if not tanque_code:
+        legacy = request.args.get("tanque")
+        if legacy:
+            tanque_code = str(legacy).strip()
+
     fpath = resolve_data_file(ENDPOINTS["calibraciones"])
     if not os.path.exists(fpath):
         return jsonify({"error":"No se encontró FFCALA.DBF"}), 404
-    rows, tkey, last_ts = read_last_readings_per_tank(fpath, tanque_value=tanque, n=n)
+
+    rows = read_dbf(fpath)
+    rows = [{(k.lower() if isinstance(k,str) else k): v for k,v in r.items()} for r in rows]
+    tk_alm = "almacen"
+    tk_tan = "tanques"
+    if almacen_code:
+        rows = [r for r in rows if str(r.get(tk_alm, "")).strip() == str(almacen_code)]
+    if tanque_code:
+        rows = [r for r in rows if str(r.get(tk_tan, "")).strip() == str(tanque_code)]
+
+    rows = _sort_by_dt(rows)
+    rows = rows[-int(n):] if n else rows
+    last_dt = _to_datetime(rows[-1]) if rows else None
+    last_ts = last_dt.strftime("%Y-%m-%d %H:%M") if last_dt else None
+
     return jsonify({
         "table":"calibraciones",
         "file": ENDPOINTS["calibraciones"],
+        "resolved_path": fpath,
         "count": len(rows),
-        "tanque_key": tkey,
+        "selector": {"almacen": almacen_code, "tanque": tanque_code},
         "last_ts": last_ts,
         "rows": rows
     })
@@ -255,8 +344,13 @@ def sse_calibraciones():
             try:
                 mtime = os.path.getmtime(fpath)
                 if (last_mtime is None) or (mtime != last_mtime):
-                    rows, tkey, last_ts = read_last_readings_per_tank(fpath, tanque_value=tanque, n=n)
-                    payload = json.dumps({"tanque_key": tkey, "count": len(rows), "last_ts": last_ts, "rows": rows}, ensure_ascii=False)
+                    rows = read_dbf(fpath)
+                    rows = [{(k.lower() if isinstance(k,str) else k): v for k,v in r.items()} for r in rows]
+                    rows = _sort_by_dt(rows)
+                    rows = rows[-int(n):] if n else rows
+                    last_dt = _to_datetime(rows[-1]) if rows else None
+                    last_ts = last_dt.strftime("%Y-%m-%d %H:%M") if last_dt else None
+                    payload = json.dumps({"count": len(rows), "last_ts": last_ts, "rows": rows}, ensure_ascii=False)
                     last_mtime = mtime
                     yield f"data: {payload}\n\n"
                 time.sleep(max(1, interval))
@@ -267,13 +361,23 @@ def sse_calibraciones():
                 yield f"data: {err}\n\n"
                 time.sleep(max(1, interval))
 
-    headers = {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-        "X-Accel-Buffering": "no"
-    }
+    headers = {"Content-Type": "text/event-stream","Cache-Control": "no-cache","Connection": "keep-alive","X-Accel-Buffering": "no"}
     return Response(event_stream(), headers=headers)
+
+@app.get('/favicon.ico')
+def favicon():
+    fav_path = os.path.join(STATIC_DIR, 'favicon.ico')
+    if os.path.exists(fav_path):
+        return send_from_directory(STATIC_DIR, 'favicon.ico')
+    return ('', 204)
+
+@app.get("/api/where")
+def api_where():
+    out = {"aliases": ALIASES}
+    for key, fname in ENDPOINTS.items():
+        path = resolve_data_file(fname)
+        out[key] = {"file": fname,"resolved_path": path,"exists": os.path.exists(path),"size_bytes": (os.path.getsize(path) if os.path.exists(path) else 0)}
+    return jsonify(out)
 
 @app.get("/")
 def index():
@@ -290,64 +394,7 @@ def open_browser_when_ready(port=5000):
         except Exception: pass
     threading.Timer(0.8, _open).start()
 
-
-
-@app.get("/api/where")
-def api_where():
-    out = {}
-    for key, fname in ENDPOINTS.items():
-        path = resolve_data_file(fname)
-        out[key] = {
-            "file": fname,
-            "resolved_path": path,
-            "exists": os.path.exists(path),
-            "size_bytes": (os.path.getsize(path) if os.path.exists(path) else 0),
-        }
-    return jsonify(out)
-
 if __name__ == "__main__":
-
     port = int(os.environ.get("PORT", "5000"))
     open_browser_when_ready(port)
     app.run(host="127.0.0.1", port=port, debug=False)
-
-
-@app.get('/favicon.ico')
-def favicon():
-    # Responde 204 si no hay favicon empaquetado
-    fav_path = os.path.join(STATIC_DIR, 'favicon.ico')
-    if os.path.exists(fav_path):
-        return send_from_directory(STATIC_DIR, 'favicon.ico')
-    return ('', 204)
-
-
-# Alias de rutas -> clave canónica de ENDPOINTS
-ALIASES = {
-    # FFCALA.DBF
-    "calados": "calibraciones",
-    "lecturas": "calibraciones",
-    "calibraciones": "calibraciones",
-    "cala": "calibraciones",
-    # FFTANQ.DBF
-    "tanque": "tanques",
-    "tanques": "tanques",
-    # FFALMA.DBF
-    "almacen": "almacenes",
-    "almacenes": "almacenes",
-    # FFARTI.DBF
-    "articulo": "articulos",
-    "articulos": "articulos",
-}
-
-
-
-# Rutas alias para "calibraciones"
-@app.get("/api/calados/ultimas")
-@app.get("/api/lecturas/ultimas")
-def api_calibraciones_ultimas_alias():
-    return api_calibraciones_ultimas()
-
-@app.get("/api/stream/calados")
-@app.get("/api/stream/lecturas")
-def sse_calibraciones_alias():
-    return sse_calibraciones()
