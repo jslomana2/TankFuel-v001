@@ -280,3 +280,12 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5000"))
     open_browser_when_ready(port)
     app.run(host="127.0.0.1", port=port, debug=False)
+
+
+@app.get('/favicon.ico')
+def favicon():
+    # Responde 204 si no hay favicon empaquetado
+    fav_path = os.path.join(STATIC_DIR, 'favicon.ico')
+    if os.path.exists(fav_path):
+        return send_from_directory(STATIC_DIR, 'favicon.ico')
+    return ('', 204)
