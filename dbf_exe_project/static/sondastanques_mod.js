@@ -364,17 +364,3 @@
 
   if(!window.__vfp_integration__) { window.setData(demo); window.setHistoryData(hist); }
 })();
-// --- Helpers para última lectura ---
-function _fmtLastLabel(s){
-  if(!s) return "—";
-  var m = /(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}))?/.exec(String(s));
-  return m ? (m[1] + (m[2] ? " " + m[2] : "")) : String(s);
-}
-async function _fetchLastReadingLabelByTanqueId(tanqueId){
-  try{
-    const r = await fetch('/api/calibraciones/ultimas?tanque_id='+encodeURIComponent(tanqueId)+'&n=1');
-    if(!r.ok) return null;
-    const j = await r.json();
-    return _fmtLastLabel(j.last_ts || null);
-  }catch(e){ return null; }
-}
