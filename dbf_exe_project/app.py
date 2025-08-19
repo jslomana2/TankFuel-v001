@@ -5,6 +5,12 @@ from datetime import datetime
 from flask import Flask, jsonify, request, send_from_directory, render_template, Response
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+def log(*args):
+    try:
+        print("[app]", *args, flush=True)
+    except Exception:
+        pass
+
 def resource_path_multi(subdir: str) -> str:
     bases = []
     meipass = getattr(sys, "_MEIPASS", None)
@@ -24,6 +30,10 @@ DATA_DIR = os.path.join(getattr(sys, "_MEIPASS", os.path.abspath(".")), "data")
 
 app = Flask(__name__, template_folder=TEMPLATES_DIR, static_folder=STATIC_DIR)
 app.wsgi_app = ProxyFix(app.wsgi_app)
+
+log("templates_dir =", TEMPLATES_DIR)
+log("static_dir    =", STATIC_DIR)
+log("data_dir      =", DATA_DIR)
 
 def read_dbf(file_path, encoding="latin-1", lower_names=True, limit=None):
     from dbfread import DBF
@@ -240,6 +250,10 @@ def api_tanques_norm():
         })
     return jsonify({"table": "tanques", "file": ENDPOINTS["tanques"], "resolved_path": fpath, "count": len(out), "rows": out})
 
+@app.get("/api/tanques")  # alias por si el JS usa este
+def api_tanques_alias():
+    return api_tanques_norm()
+
 @app.get("/api/calibraciones/ultimas")
 def api_calibraciones_ultimas():
     n = request.args.get("n", default=10, type=int)
@@ -300,13 +314,13 @@ def sse_calibraciones():
                     last_ts = last_dt.strftime("%Y-%m-%d %H:%M") if last_dt else None
                     payload = json.dumps({"count": len(rows), "last_ts": last_ts, "rows": rows}, ensure_ascii=False)
                     last_mtime = mtime
-                    yield "data: " + payload + "\n\n"
+                    yield "data: " + payload + "\n\n"  # <- replaced later
                 time.sleep(max(1, interval))
             except GeneratorExit:
                 break
             except Exception as e:
                 err = json.dumps({"error": str(e)})
-                yield "data: " + err + "\n\n"
+                yield "data: " + err + "\n\n"  # <- replaced later
                 time.sleep(max(1, interval))
 
     headers = {"Content-Type": "text/event-stream","Cache-Control": "no-cache","Connection": "keep-alive","X-Accel-Buffering": "no"}
@@ -341,6 +355,14 @@ def debug_static():
 @app.get("/")
 def index():
     return render_template("sondastanques_mod.html")
+
+@app.get("/sondastanques_mod.css")
+def static_css_root():
+    return send_from_directory(STATIC_DIR, "sondastanques_mod.css")
+
+@app.get("/sondastanques_mod.js")
+def static_js_root():
+    return send_from_directory(STATIC_DIR, "sondastanques_mod.js")
 
 @app.get("/static/<path:filename>")
 def static_files(filename):

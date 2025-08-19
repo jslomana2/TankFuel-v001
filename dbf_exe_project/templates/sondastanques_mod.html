@@ -6,7 +6,7 @@
 <meta content="IE=edge" http-equiv="X-UA-Compatible">
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Tanques – Vista avanzada (MODERNO interno)</title>
-<link href="sondastanques_mod.css" rel="stylesheet"/>
+<link {{ url_for("static", filename="sondastanques_mod.css") }} rel="stylesheet"/>
 </meta></head>
 <body>
 <div class="wrap">
@@ -66,7 +66,7 @@
 <div id="footerInfo"></div>
 </footer>
 </div>
-<script src="sondastanques_mod.js"></script>
+<script {{ url_for("static", filename="sondastanques_mod.js") }}></script>
 
 <script>
 (function(){
