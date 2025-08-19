@@ -6,34 +6,67 @@ on:
     tags: [ 'v*' ]
   workflow_dispatch:
 
+env:
+  PROJECT_DIR: dbf_exe_project
+
 jobs:
   build-windows:
     runs-on: windows-latest
-    defaults:
-      run:
-        working-directory: dbf_exe_project
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Show workspace (debug)
+        shell: pwsh
+        run: |
+          Write-Host "Workspace:" (Get-Location)
+          Get-ChildItem -Name
+          Write-Host "`nÁrbol (niveles 2):"
+          Get-ChildItem -Recurse -Depth 2 | Select-Object FullName
+
+      - name: Detect project dir
+        shell: pwsh
+        run: |
+          if (Test-Path "$env:PROJECT_DIR") {
+            Write-Host "PROJECT_DIR existe: $env:PROJECT_DIR"
+          } else {
+            Write-Host "PROJECT_DIR no existe, usaré raíz."
+            "PROJECT_DIR=." | Out-File -FilePath $env:GITHUB_ENV -Append
+          }
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
       - name: Install dependencies
+        shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r "$env:PROJECT_DIR/requirements.txt"
           pip install pyinstaller
+
       - name: Build EXE with PyInstaller
-        run: pyinstaller --noconfirm --clean --name app --onefile --add-data "templates;templates" --add-data "static;static" app.py
+        shell: pwsh
+        run: |
+          Set-Location "$env:PROJECT_DIR"
+          pyinstaller --noconfirm --clean --name app --onefile --add-data "templates;templates" --add-data "static;static" app.py
+          Set-Location -
+
       - name: List dist (debug)
-        run: dir dist
+        shell: pwsh
+        run: Get-ChildItem "$env:PROJECT_DIR/dist" -Recurse -ErrorAction SilentlyContinue
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-exe
           path: |
+            ${{ env.PROJECT_DIR }}/dist/app.exe
+            ${{ env.PROJECT_DIR }}/dist/app/app.exe
+          if-no-files-found: warn
+
             dbf_exe_project/dist/app.exe
             dbf_exe_project/dist/app/app.exe
           if-no-files-found: warn
