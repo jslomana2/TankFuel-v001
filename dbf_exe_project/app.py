@@ -72,7 +72,7 @@ def color_decimal_to_hex(n, assume_bgr=True):
     except Exception: return None
     r = (n & 0xFF); g = (n >> 8) & 0xFF; b = (n >> 16) & 0xFF
     if assume_bgr: r, b = b, r
-    return f"#{r:02X}{g:02X}{b:02X}"
+    return "#{:02X}{:02X}{:02X}".format(r, g, b)
 
 def _load_table_dict(dbf_name):
     path = resolve_data_file(dbf_name)
@@ -140,6 +140,25 @@ def _sort_by_dt(rows):
     decorated.sort(key=lambda x: (x[0] is None, x[0]))
     return [r for _, r in decorated]
 
+def filter_rows(rows, fields=None, q=None, where=None):
+    if where:
+        for k, v in where.items():
+            rows = [r for r in rows if str(r.get(k, "")).strip() == str(v)]
+    if q:
+        ql = str(q).lower()
+        def match(r):
+            for val in r.values():
+                try:
+                    if ql in str(val).lower():
+                        return True
+                except Exception:
+                    pass
+            return False
+        rows = [r for r in rows if match(r)]
+    if fields:
+        rows = [{k: r.get(k) for k in fields} for r in rows]
+    return rows
+
 def parse_tanque_selector(req):
     tid = req.args.get("tanque_id") or req.args.get("id") or None
     tanque = req.args.get("tanque")
@@ -155,11 +174,14 @@ def parse_tanque_selector(req):
 def api_table(name):
     if name in ALIASES: name = ALIASES[name]
     if name not in ENDPOINTS:
-        return jsonify({"error": f"Tabla '{name}' no está definida.", "available": list(ENDPOINTS.keys()), "aliases": list(ALIASES.keys())}), 404
+        return jsonify({"error": "Tabla '{}' no está definida.".format(name),
+                        "available": list(ENDPOINTS.keys()),
+                        "aliases": list(ALIASES.keys())}), 404
     fname = ENDPOINTS[name]
     fpath = resolve_data_file(fname)
     if not os.path.exists(fpath):
-        return jsonify({"error": f"No se encontró el archivo {fname}.", "resolved_path": fpath, "exists": False}), 404
+        return jsonify({"error": "No se encontró el archivo {}.".format(fname),
+                        "resolved_path": fpath, "exists": False}), 404
 
     limit = request.args.get("limit", type=int)
     fields_param = request.args.get("fields")
@@ -189,7 +211,7 @@ def api_tanques_norm():
         alm = str(r.get("almacen") or "").strip()
         cod = str(r.get("codigo") or "").strip()
         if not alm or not cod: continue
-        tanque_id = f"{alm}-{cod}"
+        tanque_id = "{}-{}".format(alm, cod)
         descri = r.get("descri") or None
         cap = r.get("capacidad")
         stock = r.get("stock")
@@ -221,10 +243,13 @@ def api_tanques_norm():
 @app.get("/api/calibraciones/ultimas")
 def api_calibraciones_ultimas():
     n = request.args.get("n", default=10, type=int)
-    almacen_code, tanque_code = parse_tanque_selector(request)
-    if not tanque_code:
-        legacy = request.args.get("tanque")
-        if legacy: tanque_code = str(legacy).strip()
+    tid = request.args.get("tanque_id")
+    almacen_code, tanque_code = None, None
+    if tid and "-" in tid:
+        a, c = tid.split("-", 1); almacen_code, tanque_code = a.strip(), c.strip()
+    else:
+        almacen_code = request.args.get("almacen")
+        tanque_code = request.args.get("tanque")
 
     fpath = resolve_data_file(ENDPOINTS["calibraciones"])
     if not os.path.exists(fpath):
@@ -232,6 +257,7 @@ def api_calibraciones_ultimas():
 
     rows = read_dbf(fpath)
     rows = [{(k.lower() if isinstance(k,str) else k): v for k,v in r.items()} for r in rows]
+
     if almacen_code:
         rows = [r for r in rows if str(r.get("almacen", "")).strip() == str(almacen_code)]
     if tanque_code:
@@ -274,17 +300,13 @@ def sse_calibraciones():
                     last_ts = last_dt.strftime("%Y-%m-%d %H:%M") if last_dt else None
                     payload = json.dumps({"count": len(rows), "last_ts": last_ts, "rows": rows}, ensure_ascii=False)
                     last_mtime = mtime
-                    yield f"data: {payload}
-
-"
+                    yield "data: " + payload + "\n\n"
                 time.sleep(max(1, interval))
             except GeneratorExit:
                 break
             except Exception as e:
                 err = json.dumps({"error": str(e)})
-                yield f"data: {err}
-
-"
+                yield "data: " + err + "\n\n"
                 time.sleep(max(1, interval))
 
     headers = {"Content-Type": "text/event-stream","Cache-Control": "no-cache","Connection": "keep-alive","X-Accel-Buffering": "no"}
@@ -325,7 +347,7 @@ def static_files(filename):
     return send_from_directory(STATIC_DIR, filename)
 
 def open_browser_when_ready(port=5000):
-    url = f"http://127.0.0.1:{port}/"
+    url = "http://127.0.0.1:{}/".format(port)
     def _open():
         try: webbrowser.open(url)
         except Exception: pass
