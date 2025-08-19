@@ -362,5 +362,90 @@
     ]
   };
 
-  if(!window.__vfp_integration__) { window.setData(demo); window.setHistoryData(hist); }
+  if(!window.__vfp_integration__) { /* demo queda si falla la API */ }
 })();
+
+// ===================== Integración con ENDPOINTS Flask =====================
+(function(){
+  const API = { tanques:'/api/tanques_norm', ultimas:'/api/calibraciones/ultimas' };
+
+  function norm(r){
+    return {
+      id: String(r.tanque_id||''),
+      almacen: r.almacen_id,
+      nombre: r.descripcion || ("T"+(r.tanque_codigo||"")),
+      producto: r.producto_nombre || String(r.producto_id||"-"),
+      color: r.producto_color || "#1987ff",
+      capacidad: Number(r.capacidad_l||0),
+      volumen: Number((r.stock15_l!=null ? r.stock15_l : r.stock_l)||0),
+      status: "ok",
+      alturaAgua: 0,
+      temperatura: (r.temp_ultima_c!=null ? Number(r.temp_ultima_c) : null),
+      spark: []
+    };
+  }
+
+  function group(tanks){
+    const map = {};
+    (tanks||[]).forEach(t => {
+      const k = t.almacen || "GENERAL";
+      (map[k] = map[k] || { id:k, nombre:k, tanques:[] }).tanques.push(t);
+    });
+    return Object.keys(map).sort().map(k => map[k]);
+  }
+
+  async function fetchTanques(){
+    const r = await fetch(API.tanques, {cache:'no-store'});
+    if(!r.ok) throw new Error("tanques_norm "+r.status);
+    const j = await r.json();
+    return group((j.rows||[]).map(norm));
+  }
+
+  function pickMed(row){
+    if(row.litros15!=null) return Number(row.litros15)||0;
+    if(row.litros!=null) return Number(row.litros)||0;
+    return null;
+  }
+
+  async function enrich(t){
+    try{
+      const r = await fetch(API.ultimas + '?tanque_id=' + encodeURIComponent(t.id) + '&n=24', {cache:'no-store'});
+      if(!r.ok) return t;
+      const j = await r.json();
+      const rows = (j.rows||[]).slice().sort((a,b)=>((a.fecha||'')+' '+(a.hora||'')).localeCompare((b.fecha||'')+' '+(b.hora||'')));
+      const med = rows.map(pickMed).filter(v=>v!=null);
+      t.spark = med.slice(-10);
+      if(j.last_ts) t._last_ts = j.last_ts;
+      const last = rows.length? rows[rows.length-1] : null;
+      if(last){
+        if(last.agua_mm!=null) t.alturaAgua = Number(last.agua_mm)||0;
+        else if(last.agua!=null) t.alturaAgua = Number(last.agua)||0;
+      }
+      const key = (t.almacen||'')+'|'+(t.nombre||'');
+      const histRows = rows.map(r=>({ fecha: r.fecha + (r.hora? ' '+String(r.hora).slice(0,5):''), medido: pickMed(r)||0, libro: pickMed(r)||0 }));
+      if(typeof window.setHistoryData==='function'){ const m={}; m[key]=histRows; window.setHistoryData(m); }
+      return t;
+    }catch(e){ return t; }
+  }
+
+  async function load(){
+    const almacenes = await fetchTanques();
+    if(typeof window.setData==='function'){ window.setData({ almacenes, activoId: almacenes.length? almacenes[0].id : null }); }
+    const all=[]; almacenes.forEach(a=>(a.tanques||[]).forEach(t=>all.push(t)));
+    let i=0, step=6;
+    async function loop(){
+      if(i>=all.length) return;
+      await Promise.all(all.slice(i,i+step).map(enrich));
+      i+=step;
+      if(typeof window.setData==='function'){ window.setData({ almacenes, activoId: almacenes.length? almacenes[0].id : null }); }
+      return loop();
+    }
+    await loop();
+  }
+
+  (async()=>{
+    try{ await load(); window.__vfp_integration__=true; console.log("Frontend integrado con API."); }
+    catch(e){ console.warn("No hay API, se queda el demo:", e); }
+  })();
+})();
+// =================== FIN Integración ENDPOINTS ===================

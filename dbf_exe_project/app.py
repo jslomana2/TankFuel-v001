@@ -5,12 +5,6 @@ from datetime import datetime
 from flask import Flask, jsonify, request, send_from_directory, render_template, Response
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-def log(*args):
-    try:
-        print("[app]", *args, flush=True)
-    except Exception:
-        pass
-
 def resource_path_multi(subdir: str) -> str:
     bases = []
     meipass = getattr(sys, "_MEIPASS", None)
@@ -30,10 +24,6 @@ DATA_DIR = os.path.join(getattr(sys, "_MEIPASS", os.path.abspath(".")), "data")
 
 app = Flask(__name__, template_folder=TEMPLATES_DIR, static_folder=STATIC_DIR)
 app.wsgi_app = ProxyFix(app.wsgi_app)
-
-log("templates_dir =", TEMPLATES_DIR)
-log("static_dir    =", STATIC_DIR)
-log("data_dir      =", DATA_DIR)
 
 def read_dbf(file_path, encoding="latin-1", lower_names=True, limit=None):
     from dbfread import DBF
@@ -94,17 +84,8 @@ def _load_table_dict(dbf_name):
 
 def resolve_product_details(almacen_code, articulo_code):
     alma_rows, _ = _load_table_dict(ENDPOINTS["almacenes"])
-    if alma_rows:
-        for r in alma_rows:
-            if r.get("codigo") == almacen_code or r.get("almacen") == almacen_code:
-                art = r.get("articulo") or r.get("codart") or r.get("producto") or None
-                if art and str(art).strip() == str(articulo_code).strip():
-                    name = r.get("descri") or r.get("nombre") or None
-                    color_dec = r.get("colorprodu") or r.get("color") or None
-                    color_hex = color_decimal_to_hex(color_dec) if color_dec is not None else None
-                    if name or color_hex:
-                        return {"product_name": name, "product_color_hex": color_hex}
     arti_rows, _ = _load_table_dict(ENDPOINTS["articulos"])
+    # Intento directo a ARTICULOS por producto
     if arti_rows:
         for r in arti_rows:
             if str(r.get("codigo")).strip() == str(articulo_code).strip():
@@ -112,6 +93,16 @@ def resolve_product_details(almacen_code, articulo_code):
                 color_dec = r.get("colorprodu") or r.get("color") or None
                 color_hex = color_decimal_to_hex(color_dec) if color_dec is not None else None
                 return {"product_name": name, "product_color_hex": color_hex}
+    # Fallback por FFALMA (si ahí también hay descri/color por artículo+almacén)
+    if alma_rows:
+        for r in alma_rows:
+            if str(r.get("codigo")).strip() == str(almacen_code).strip():
+                art = r.get("articulo") or r.get("codart") or r.get("producto") or None
+                if art and str(art).strip() == str(articulo_code).strip():
+                    name = r.get("descri") or r.get("nombre") or None
+                    color_dec = r.get("colorprodu") or r.get("color") or None
+                    color_hex = color_decimal_to_hex(color_dec) if color_dec is not None else None
+                    return {"product_name": name, "product_color_hex": color_hex}
     return {"product_name": None, "product_color_hex": None}
 
 def _find_field(candidates, keys_lower):
@@ -145,8 +136,7 @@ def _to_datetime(row):
     return None
 
 def _sort_by_dt(rows):
-    decorated = []
-    for r in rows: decorated.append((_to_datetime(r), r))
+    decorated = [(_to_datetime(r), r) for r in rows]
     decorated.sort(key=lambda x: (x[0] is None, x[0]))
     return [r for _, r in decorated]
 
@@ -168,17 +158,6 @@ def filter_rows(rows, fields=None, q=None, where=None):
     if fields:
         rows = [{k: r.get(k) for k in fields} for r in rows]
     return rows
-
-def parse_tanque_selector(req):
-    tid = req.args.get("tanque_id") or req.args.get("id") or None
-    tanque = req.args.get("tanque")
-    almacen = req.args.get("almacen")
-    if tid and "-" in tid:
-        a, c = tid.split("-", 1); return a.strip(), c.strip()
-    if tanque and almacen: return str(almacen).strip(), str(tanque).strip()
-    if tanque and "-" in tanque:
-        a, c = tanque.split("-", 1); return a.strip(), c.strip()
-    return None, None
 
 @app.get("/api/<name>")
 def api_table(name):
@@ -250,7 +229,7 @@ def api_tanques_norm():
         })
     return jsonify({"table": "tanques", "file": ENDPOINTS["tanques"], "resolved_path": fpath, "count": len(out), "rows": out})
 
-@app.get("/api/tanques")  # alias por si el JS usa este
+@app.get("/api/tanques")
 def api_tanques_alias():
     return api_tanques_norm()
 
@@ -279,8 +258,17 @@ def api_calibraciones_ultimas():
 
     rows = _sort_by_dt(rows)
     rows = rows[-int(n):] if n else rows
-    last_dt = _to_datetime(rows[-1]) if rows else None
-    last_ts = last_dt.strftime("%Y-%m-%d %H:%M") if last_dt else None
+    last_dt = rows and rows[-1] and _sort_by_dt(rows)[-1] and None
+    # compute last_ts robustly
+    last_ts = None
+    if rows:
+        dt = None
+        try:
+            dt = _to_datetime(rows[-1])
+        except Exception:
+            dt = None
+        if dt:
+            last_ts = dt.strftime("%Y-%m-%d %H:%M")
 
     return jsonify({
         "table":"calibraciones",
@@ -314,13 +302,13 @@ def sse_calibraciones():
                     last_ts = last_dt.strftime("%Y-%m-%d %H:%M") if last_dt else None
                     payload = json.dumps({"count": len(rows), "last_ts": last_ts, "rows": rows}, ensure_ascii=False)
                     last_mtime = mtime
-                    yield "data: " + payload + "\n\n"  # <- replaced later
+                    yield "data: " + payload + "\n\n"
                 time.sleep(max(1, interval))
             except GeneratorExit:
                 break
             except Exception as e:
                 err = json.dumps({"error": str(e)})
-                yield "data: " + err + "\n\n"  # <- replaced later
+                yield "data: " + err + "\n\n"
                 time.sleep(max(1, interval))
 
     headers = {"Content-Type": "text/event-stream","Cache-Control": "no-cache","Connection": "keep-alive","X-Accel-Buffering": "no"}
