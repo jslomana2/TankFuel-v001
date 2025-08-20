@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Tanques – Vista avanzada</title>
-  <link rel="stylesheet" href="/sondastanques_mod.css"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='sondastanques_mod.css') }}"/>
 </head>
 <body>
 <div class="wrap">
@@ -34,6 +34,6 @@
     </div>
   </footer>
 </div>
-<script src="/sondastanques_mod.js"></script>
+<script src="{{ url_for('static', filename='sondastanques_mod.js') }}"></script>
 </body>
 </html>
