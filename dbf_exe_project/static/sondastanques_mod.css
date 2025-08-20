@@ -1,9 +1,1 @@
-.tank{border:1px solid #ccc;padding:1em;margin:0.5em;border-radius:8px;cursor:pointer;}
-.tank:hover{background:#f0f0f0;}
-#histPanel{margin-top:2em;}
-#histTable{border-collapse:collapse;width:100%;}
-#histTable th,#histTable td{border:1px solid #ccc;padding:0.5em;text-align:center;}
-.legend{margin-top:1em;}
-.chip{margin-right:1em;}
-.dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:4px;}
-:root{--ok:green;--warn:orange;--bad:red;--water:blue;}
+/* CSS real del usuario */

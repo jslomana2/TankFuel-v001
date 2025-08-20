@@ -1,62 +1,83 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-import os, sys, threading, webbrowser, logging
-from datetime import datetime
-from flask import Flask, jsonify, render_template
-from werkzeug.middleware.proxy_fix import ProxyFix
-from dbfread import FieldParser
+import os, logging
+from flask import Flask, jsonify, render_template, request
+from dbfread import DBF
 
-# --- Logging ---
-logfile = os.path.join(os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else __file__), "debug.log")
-logging.basicConfig(
-    filename=logfile,
-    level=logging.DEBUG,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
+app = Flask(__name__)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-def excepthook(exc_type, exc_value, tb):
-    import traceback
-    logging.error("".join(traceback.format_exception(exc_type, exc_value, tb)))
-    sys.__excepthook__(exc_type, exc_value, tb)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DBF_DIR = os.path.join(BASE_DIR, "FUEL_001")  # Ajusta si necesario
 
-sys.excepthook = excepthook
-
-# --- Safe parser ---
-class SafeFieldParser(FieldParser):
-    def parseM(self, field, data):
-        return None
-
-def safe_json_val(v):
-    if v is None:
-        return ""
-    if isinstance(v, bytes):
-        try:
-            return v.decode("latin-1").strip()
-        except Exception:
-            return v.hex()
-    if isinstance(v, datetime):
-        return v.isoformat()
-    return v
-
-# --- Flask app ---
-TEMPLATES_DIR = "templates"
-STATIC_DIR = "static"
-app = Flask(__name__, template_folder=TEMPLATES_DIR, static_folder=STATIC_DIR)
-app.wsgi_app = ProxyFix(app.wsgi_app)
-
-@app.route("/")
-def index():
-    return render_template("sondastanques_mod.html")
-
-@app.route("/api/test")
-def api_test():
-    return jsonify({"status":"ok","message":"Servidor levantado correctamente"})
-
-if __name__ == "__main__":
+def read_dbf(name):
+    path = os.path.join(DBF_DIR, name)
+    if not os.path.exists(path):
+        return []
     try:
-        port = int(os.environ.get("PORT", "5000"))
-        logging.info(f"Iniciando servidor en http://127.0.0.1:{port}")
-        app.run(host="127.0.0.1", port=port, debug=True)
+        return [dict(r) for r in DBF(path, load=True, ignore_missing_memofile=True)]
     except Exception as e:
-        logging.exception("Fallo al iniciar la app")
-        raise
+        logging.error(f"Error leyendo {name}: {e}")
+        return []
+
+@app.route('/')
+def index():
+    return render_template('sondastanques_mod.html')
+
+@app.route('/api/where')
+def api_where():
+    files = ['FFALMA.DBF','FFARTI.DBF','FFCALA.DBF','FFTANQ.DBF']
+    result = {}
+    for f in files:
+        p = os.path.join(DBF_DIR, f)
+        result[f.lower()] = {
+            "exists": os.path.exists(p),
+            "file": f,
+            "resolved_path": p,
+            "size_bytes": os.path.getsize(p) if os.path.exists(p) else None
+        }
+    return jsonify(result)
+
+@app.route('/api/tanques_norm')
+def api_tanques_norm():
+    tanques = read_dbf('FFTANQ.DBF')
+    almacenes = {a['CODIGO']:a for a in read_dbf('FFALMA.DBF')}
+    articulos = {a['CODIGO']:a for a in read_dbf('FFARTI.DBF')}
+    rows = []
+    for t in tanques:
+        tid = f"{t.get('ALMACEN')}-{t.get('CODIGO')}"
+        art = articulos.get(t.get('ARTICULO'))
+        alm = almacenes.get(t.get('ALMACEN'))
+        rows.append({
+            "tanque_id": tid,
+            "descripcion": t.get("DESCRI"),
+            "capacidad_l": t.get("CAPACIDAD"),
+            "stock_l": t.get("STOCK"),
+            "stock15_l": t.get("STOCK15"),
+            "producto_id": t.get("ARTICULO"),
+            "almacen_id": t.get("ALMACEN"),
+            "temp_ultima_c": t.get("TEMPULT"),
+            "producto_nombre": art.get("DESCRI") if art else None,
+            "almacen_nombre": alm.get("NOMBRE") if alm else None
+        })
+    return jsonify({"rows": rows})
+
+@app.route('/api/articulos')
+def api_articulos():
+    return jsonify({"rows": read_dbf("FFARTI.DBF")})
+
+@app.route('/api/almacenes')
+def api_almacenes():
+    return jsonify({"rows": read_dbf("FFALMA.DBF")})
+
+@app.route('/api/calibraciones/ultimas')
+def api_calibraciones_ultimas():
+    tanque_id = request.args.get("tanque_id")
+    n = int(request.args.get("n", 10))
+    data = read_dbf("FFCALA.DBF")
+    if tanque_id:
+        data = [r for r in data if f"{r.get('ALMACEN')}-{r.get('TANQUES')}" == tanque_id]
+    data = sorted(data, key=lambda x: (x.get("FECHA"), x.get("HORA")), reverse=True)[:n]
+    return jsonify({"rows": data})
+
+if __name__ == '__main__':
+    logging.info("Iniciando servidor en http://127.0.0.1:5000")
+    app.run(debug=True)
