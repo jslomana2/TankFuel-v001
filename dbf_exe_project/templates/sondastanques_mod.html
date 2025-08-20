@@ -2,25 +2,64 @@
 <html lang="es">
 <head>
   <meta charset="utf-8"/>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Tanques – Vista avanzada</title>
+  <title>Tanques – Vista avanzada (MODERNO interno)</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='sondastanques_mod.css') }}"/>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>PROCONSI</h1>
-    <div class="title">Tanques · Vista avanzada</div>
+    <div class="h-inner">
+      <a class="brand" href="https://www.proconsi.com" rel="noopener" target="_blank">
+        <img alt="Proconsi" src="https://cdn-ildmohp.nitrocdn.com/OlNFhHrAqkTDgXLhkVWXZfchjFGWnneH/assets/images/optimized/rev-7a6779b/proconsi.com/wp-content/uploads/Logotipo-completo-Proconsi-PNG-1.png"/>
+      </a>
+      <div class="title">Tanques · Vista avanzada</div>
+      <div class="pill" id="summary">Cargando…</div>
+      <div class="spacer"></div>
+      <div class="ctrls">
+        <button id="alarmsBtn" title="Ir a alarmas">🔔 Alarmas</button>
+        <button id="refreshBtn" title="Refrescar">⟳ Refrescar</button>
+        <button id="prevBtn" title="Almacén anterior">←</button>
+        <select id="almacenSel"></select>
+        <button id="nextBtn" title="Almacén siguiente">→</button>
+      </div>
+    </div>
+    <div class="h-sub">
+      <label class="chk-all">
+        <input id="allToggle" type="checkbox"/><span>Ver todos los almacenes</span>
+      </label>
+    </div>
   </header>
-
-  <div id="noData" hidden style="text-align:center;margin:2em;color:#c00;">No hay datos disponibles</div>
 
   <div class="grid" id="grid"></div>
 
-  <div id="histPanel" hidden>
-    <h3 id="histTitle">Histórico</h3>
-    <table id="histTable">
-      <thead><tr><th>Fecha</th><th>Litros</th><th>Litros 15º</th><th>Temp</th></tr></thead>
+  <div id="totales" aria-label="Totales por producto"></div>
+
+  <div hidden id="histPanel">
+    <div id="histHeader">
+      <div class="title" id="histTitle">Histórico</div>
+      <div class="pill" id="histInfo">—</div>
+      <div id="histBtns">
+        <select id="groupSel" title="Agrupar para el gráfico">
+          <option value="hours">Horas</option>
+          <option value="days" selected>Días</option>
+        </select>
+        <button id="exportBtn" title="Exportar a Excel (CSV)">⬇ Excel</button>
+        <button id="pdfBtn" title="Exportar a PDF">⬇ PDF</button>
+      </div>
+    </div>
+    <div id="histFilters">
+      <label>Desde <input id="fromDate" type="date"/></label>
+      <label>Hasta <input id="toDate" type="date"/></label>
+      <button id="applyFilter">Aplicar</button>
+      <button id="quick7">Últimos 7 días</button>
+      <button id="quick30">Últimos 30 días</button>
+      <span class="pill" id="rowsCount">0 filas</span>
+    </div>
+    <canvas id="histChart"></canvas>
+    <table class="hist" id="histTable">
+      <thead><tr><th>Fecha</th><th>Medido (L)</th><th>Libro (L)</th><th>Dif. (L)</th></tr></thead>
       <tbody></tbody>
     </table>
   </div>
@@ -32,8 +71,10 @@
       <span class="chip"><span class="dot" style="background:var(--bad)"></span> Alarma</span>
       <span class="chip"><span class="dot" style="background:var(--water)"></span> Agua</span>
     </div>
+    <div id="footerInfo"></div>
   </footer>
 </div>
+
 <script src="{{ url_for('static', filename='sondastanques_mod.js') }}"></script>
 </body>
 </html>
