@@ -1,1 +1,39 @@
-<!DOCTYPE html><html><body>HTML con histórico</body></html>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tanques – Vista avanzada</title>
+  <link rel="stylesheet" href="/sondastanques_mod.css"/>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>PROCONSI</h1>
+    <div class="title">Tanques · Vista avanzada</div>
+  </header>
+
+  <div id="noData" hidden style="text-align:center;margin:2em;color:#c00;">No hay datos disponibles</div>
+
+  <div class="grid" id="grid"></div>
+
+  <div id="histPanel" hidden>
+    <h3 id="histTitle">Histórico</h3>
+    <table id="histTable">
+      <thead><tr><th>Fecha</th><th>Litros</th><th>Litros 15º</th><th>Temp</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <footer>
+    <div class="legend">
+      <span class="chip"><span class="dot" style="background:var(--ok)"></span> Normal</span>
+      <span class="chip"><span class="dot" style="background:var(--warn)"></span> Atención</span>
+      <span class="chip"><span class="dot" style="background:var(--bad)"></span> Alarma</span>
+      <span class="chip"><span class="dot" style="background:var(--water)"></span> Agua</span>
+    </div>
+  </footer>
+</div>
+<script src="/sondastanques_mod.js"></script>
+</body>
+</html>
