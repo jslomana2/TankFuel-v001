@@ -1,33 +1,31 @@
-# PROCONSI – Tanques (Vista avanzada)
+# PROCONSI · Tanques (dbf_exe_project)
 
-Este paquete contiene una versión funcional del proyecto **dbf_exe_project**.
+## Cómo ejecutar en local
+1. Instala dependencias:
+   ```bash
+   pip install flask dbfread
+   ```
+2. Coloca los DBF **FFALMA.DBF**, **FFARTI.DBF**, **FFTANQ.DBF** (y **FFCALA.DBF** si aplica) **en la misma carpeta** que `app.py` o define la variable de entorno `DBF_DIR` apuntando a la carpeta donde están.
+3. Ejecuta:
+   ```bash
+   python app.py
+   ```
+4. Abre `http://127.0.0.1:5000`
 
-## Estructura
+## Build del EXE (PyInstaller)
+```bash
+pyinstaller -y app.py ^
+  --name "PROCONSI-Tanques" ^
+  --add-data "templates;templates" ^
+  --add-data "static;static"
 ```
-dbf_exe_project/
- ├─ app.py
- ├─ requirements.txt
- ├─ run.bat
- ├─ FFALMA.DBF / FFARTI.DBF / FFTANQ.DBF / (FFCALA.DBF opcional)
- ├─ templates/
- │   └─ sondastanques_mod.html
- └─ static/
-     ├─ sondastanques_mod.css
-     ├─ sondastanques_mod.js
-     └─ favicon.ico
-```
+Copia los DBF **al lado del EXE** (o expón `DBF_DIR`) para que no aparezca el aviso "DBF no encontrado".
 
-## Cómo ejecutar (local)
-1. Instala dependencias: `pip install -r requirements.txt`
-2. Ejecuta: `python app.py` (o `run.bat` en Windows)
-3. Abre: http://127.0.0.1:5000
-
-## Empaquetar EXE con PyInstaller (local)
-```
-pyinstaller --noconfirm --onefile --add-data "templates;templates" --add-data "static;static" --icon static\favicon.ico --name "PROCONSI-Tanques" app.py
-```
-**Coloca los DBF en la misma carpeta donde queda el exe.**
+## Endpoints principales
+- `/` → UI
+- `/api/almacenes` → lista de almacenes (FFALMA)
+- `/api/tanques_norm` → tanques normalizados con color del producto desde `FFARTI.COLORPRODU`
 
 ## Notas
-- El color de producto sale de `FFARTI.DBF` en el campo `COLORPRODU` (si no existe, intenta `COLORPRODUCTO`/`COLOR`).
-- El servidor busca los DBF en el mismo directorio del exe/app.py (`DBF_DIR`). Puedes forzarlo con la variable de entorno `DBF_DIR`.
+- El backend normaliza nombres de campos a mayúsculas y es tolerante con variantes comunes: `CODIALM/CODALMA/ALMACEN`, `CODIARTI/CODIGO/ARTICULO`, etc.
+- El color del producto se toma de **FFARTI.COLORPRODU** (si falta, se usa `#2aa8ff`).
