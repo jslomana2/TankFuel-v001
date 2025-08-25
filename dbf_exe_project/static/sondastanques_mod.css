@@ -88,7 +88,6 @@
     #histChart{ height:300px }
   }
 
-"+css+"
 /* Segunda línea del header */
 .h-sub{display:flex;align-items:center;gap:12px;padding:8px 16px;border-top:1px solid #e6e9ee;background:#fff;color:#0b1220}
 .h-sub .chk-all{display:inline-flex;align-items:center;gap:8px;font-size:13px}

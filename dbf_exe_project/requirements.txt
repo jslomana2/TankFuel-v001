@@ -1,4 +1,4 @@
-Flask==2.3.3
+Flask==3.0.3
 dbfread==2.0.7
-Jinja2==3.1.4
-Werkzeug==2.3.7
+pandas==2.2.2
+reportlab==4.2.2

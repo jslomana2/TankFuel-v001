@@ -6,7 +6,7 @@
 <meta content="IE=edge" http-equiv="X-UA-Compatible">
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Tanques – Vista avanzada (MODERNO interno)</title>
-<link href="sondastanques_mod.css" rel="stylesheet"/>
+<link href="/static/sondastanques_mod.css" rel="stylesheet"/>
 </meta></head>
 <body>
 <div class="wrap">
@@ -66,11 +66,10 @@
 <div id="footerInfo"></div>
 </footer>
 </div>
-<script src="sondastanques_mod.js"></script>
+<script src="/static/sondastanques_mod.js"></script>
 
 <script>
 (function(){
-  // No invasivo: envolvemos window.setData para poder conmutar entre original y "todos"
   var cb, lastRaw = null, setDataOrig = null;
   function qs(id){ return document.getElementById(id); }
   function setControlsEnabled(flag){
@@ -83,7 +82,6 @@
     try{
       var tanks = [];
       if(Array.isArray(raw)){
-        // Ya es array de tanques
         tanks = raw.slice();
       }else if(raw && Array.isArray(raw.almacenes)){
         raw.almacenes.forEach(function(a){
@@ -92,7 +90,6 @@
       }else{
         return raw;
       }
-      // Forzamos mismo almacen para que se agrupen en uno solo
       tanks = tanks.map(function(t){
         try{
           var c = Object.assign({}, t);
@@ -124,12 +121,11 @@
           setDataOrig = window.setData;
           window.setData = function(input){
             lastRaw = input;
-            // Llamamos según modo actual
             applyMode();
           };
         }
         clearInterval(iv);
-      }else if(tries>50){ // ~5s
+      }else if(tries>50){
         clearInterval(iv);
       }
     }, 100);
@@ -138,7 +134,6 @@
     cb = qs("allToggle");
     hookSetDataSoon();
     if(cb){
-      // por defecto: desmarcado; deja controles habilitados
       cb.checked = false;
       cb.addEventListener("change", applyMode);
     }
