@@ -1,183 +1,156 @@
 (function(){
-  const qs = (sel, root=document) => root.querySelector(sel);
-  const qsa = (sel, root=document) => Array.from(root.querySelectorAll(sel));
-  const grid = qs("#grid");
-  const totales = qs("#totales");
-  const almacenSel = qs("#almacenSel");
-  const summary = qs("#summary");
-  const refreshBtn = qs("#refreshBtn");
-  const prevBtn = qs("#prevBtn");
-  const nextBtn = qs("#nextBtn");
+  const $ = sel => document.querySelector(sel);
+  const tanksGrid = $("#tanksGrid");
+  const almacenSel = $("#almacenSel");
+  const refreshBtn = $("#refreshBtn");
+  const verTodosBtn = $("#verTodosBtn");
+  const histInfo = $("#histInfo");
+  const histTableBody = document.querySelector("#histTable tbody");
 
-  let allArticulos = [];
-  let byArticulo = new Map(); // key: CODIGO (producto_id) [opcionalmente (ALMACEN,CODIGO)]
-  let byArticuloAlm = new Map(); // key: `${ALMACEN}|${CODIGO}`
+  let currentAlm = null;
+  let allAlmacenes = [];
 
-  function winColorToHex(dec){
-    try{
-      if(dec === null || dec === undefined) return null;
-      let n = Number(dec);
-      if(!isFinite(n)) return null;
-      if(n < 0) n = (n + (2**32)) % (2**32);
-      const b = (n >> 16) & 0xFF, g = (n >> 8) & 0xFF, r = n & 0xFF;
-      return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`.toUpperCase();
-    }catch(_){ return null; }
+  function fmt(n, d=0){
+    if(n===null || n===undefined || isNaN(n)) return "-";
+    return Number(n).toLocaleString('es-ES', {maximumFractionDigits:d, minimumFractionDigits:d});
+  }
+  function clamp(v, mi, ma){return Math.min(ma, Math.max(mi, v));}
+
+  async function loadAlmacenes(){
+    const res = await fetch("/api/almacenes");
+    const js = await res.json();
+    allAlmacenes = js.rows || [];
+    renderAlmacenSelector();
   }
 
-  function colorFor(tank){
-    // 1) buscar por (almacen, producto_id) en FFARTI
-    const key = `${tank.almacen_id}|${tank.producto_id}`;
-    const rec = byArticuloAlm.get(key) || byArticulo.get(tank.producto_id);
-    if(rec && ("COLORPRODU" in rec)){
-      const hex = winColorToHex(rec.COLORPRODU);
-      if(hex) return hex;
-    }
-    // 2) fallback por producto_nombre
-    const name = (tank.producto_nombre || "").toUpperCase();
-    if(name.includes("GASOLEO A")) return "#3B82F6";
-    if(name.includes("GASOLEO B")) return "#22C55E";
-    if(name.includes("GASOLEO C")) return "#F59E0B";
-    if(name.includes("HVO") || name.includes("NEXAR")) return "#EAB308";
-    if(name.includes("AD-BLUE") || name.includes("ADBLUE")) return "#60A5FA";
-    // 3) comodín
-    return "#2AA8FF";
+  function renderAlmacenSelector(){
+    almacenSel.innerHTML = "";
+    const optAll = document.createElement("option");
+    optAll.value = "";
+    optAll.textContent = "Todos";
+    almacenSel.appendChild(optAll);
+    (allAlmacenes||[]).forEach(a=>{
+      const o = document.createElement("option");
+      o.value = a.CODIGO || a.almacen_id || a.codigo || "";
+      o.textContent = (a.NOMBRE || a.nombre || o.value);
+      almacenSel.appendChild(o);
+    });
+    almacenSel.value = currentAlm || "";
   }
 
-  function computeFill(hex){
-    // Devuelve {fill, fillLight} para CSS variables
-    // simple: lighten/darken por mezcla
-    function mix(c1, c2, p){
-      const a = c1.match(/.{2}/g).map(h=>parseInt(h,16));
-      const b = c2.match(/.{2}/g).map(h=>parseInt(h,16));
-      const r = a.map((v,i)=>Math.round(v*(1-p)+b[i]*p));
-      return r.map(v=>v.toString(16).padStart(2,"0")).join("").toUpperCase();
-    }
-    const base = hex.replace("#","");
-    const dark = mix(base,"000000",0.35);
-    const light = mix(base,"FFFFFF",0.45);
-    return { fill:`#${dark}`, fillLight:`#${light}` };
+  function stateClass(p){
+    if(p >= 50) return "p-ok";
+    if(p >= 20) return "p-warn";
+    return "p-bad";
   }
 
-  function pct(n){ return Math.max(0, Math.min(100, n)); }
+  function ringSVG(percent, color){
+    const p = clamp(percent, 0, 100);
+    const r = 40, c = 2*Math.PI*r, off = c*(1-p/100);
+    return `<svg width="92" height="92" viewBox="0 0 92 92" aria-hidden="true">
+      <circle cx="46" cy="46" r="${r}" fill="none" stroke="#eef2f7" stroke-width="6"/>
+      <circle cx="46" cy="46" r="${r}" fill="none" stroke="${color||'#3b82f6'}" stroke-width="6" 
+              stroke-dasharray="${c.toFixed(2)}" stroke-dashoffset="${off.toFixed(2)}"
+              transform="rotate(-90 46 46)"/>
+    </svg>`;
+  }
 
-  function render(tanks){
-    grid.innerHTML = "";
-    let totalsByProduct = new Map();
-    let almacenList = Array.from(new Set(tanks.map(t => t.almacen_id))).sort();
-    if(almacenSel){
-      almacenSel.innerHTML = almacenList.map(a => `<option value="${a}">${a}</option>`).join("");
-    }
-    for(const t of tanks){
-      const cap = Number(t.capacidad_l||0);
-      const stock = Number(t.stock_l||0);
-      const perc = cap>0 ? (stock*100.0/cap) : 0;
-      const hex = colorFor(t);
-      const {fill, fillLight} = computeFill(hex);
-      const card = document.createElement("div");
-      card.className = "card";
-      card.innerHTML = `
-        <div class="tankWrap">
-          <div class="scale">
-            <div class="tick"><div class="line"></div>100%</div>
-            <div class="tick"><div class="line"></div>75%</div>
-            <div class="tick"><div class="line"></div>50%</div>
-            <div class="tick"><div class="line"></div>25%</div>
-            <div class="tick"><div class="line"></div>0%</div>
-          </div>
-          <div class="tank" style="--fill:${fill};--fillLight:${fillLight}">
-            <div class="liquid" style="height:${pct(perc).toFixed(1)}%">
-              <div class="wave"></div>
-              <div class="wave wave2"></div>
-              <div class="wave wave3"></div>
-            </div>
-            <div class="water" hidden></div>
-            <div class="gloss"></div>
-            <div class="stripe"></div>
-            <div class="pct">${pct(perc).toFixed(1)}%</div>
-          </div>
+  function colorFrom(r){
+    // preferimos color_hex del backend (derivado de FFARTI.COLORPRODU)
+    if(r.color_hex) return r.color_hex;
+    // fallback por nombre del producto
+    const name = (r.producto_nombre||"").toUpperCase();
+    if(name.includes("HVO")) return "#ff7f0e";
+    if(name.includes("AD-BLUE") || name.includes("ADBLUE")) return "#1d4ed8";
+    if(name.includes("GASOLEO A")) return "#10b981";
+    if(name.includes("GASOLEO B")) return "#f59e0b";
+    if(name.includes("GASOLEO C")) return "#ef4444";
+    return "#3b82f6";
+  }
+
+  function tankCard(r){
+    const cap = Number(r.capacidad_l||0);
+    const stk = Number(r.stock_l||0);
+    const pct = cap>0 ? (100*stk/cap) : 0;
+    const color = colorFrom(r);
+    const cls = stateClass(pct);
+    const title = (r.descripcion||"").trim() || `Tanque ${r.tanque_codigo||""}`;
+    const alm = r.almacen_id||"";
+    const pid = r.producto_id||"";
+    const pname = r.producto_nombre||"";
+    const temp = r.temp_ultima_c!==undefined && r.temp_ultima_c!=="" ? `${fmt(r.temp_ultima_c,1)} °C` : "-";
+    const tid = r.tanque_id || `${alm}-${r.tanque_codigo||""}`;
+
+    const el = document.createElement("div");
+    el.className = `tank ${cls}`;
+    el.innerHTML = `
+      <div class="bar-wrap" title="${fmt(pct,0)}%">
+        ${ringSVG(pct, color)}
+        <div class="fill">${fmt(pct,0)}%</div>
+      </div>
+      <div class="label">
+        <h3>${title}</h3>
+        <div class="meta">
+          <b>${pname}</b> · ${fmt(stk,0)} / ${fmt(cap,0)} L · T: ${temp} <br/>
+          <small>Almacén: ${alm} · Código: ${r.tanque_codigo||"-"}</small>
         </div>
-        <div>
-          <div class="name">${t.descripcion||"-"}</div>
-          <div class="kv">
-            <div>Almacén</div><strong>${t.almacen_id||"-"}</strong>
-            <div>Producto</div><strong>${t.producto_nombre||t.producto_id||"-"}</strong>
-            <div>Capacidad</div><strong>${cap.toLocaleString()} L</strong>
-            <div>Stock</div><strong>${stock.toLocaleString()} L</strong>
-            <div>Temp</div><strong>${(t.temp_ultima_c ?? "").toString()||"—"}</strong>
-            <div>ID</div><strong>${t.tanque_id||"-"}</strong>
-          </div>
-        </div>
-      `;
-      grid.appendChild(card);
-
-      const key = t.producto_nombre || t.producto_id || "Otros";
-      const cur = totalsByProduct.get(key) || {litros:0, hex:hex};
-      cur.litros += stock;
-      totalsByProduct.set(key, cur);
-    }
-
-    // render totales chips
-    totales.innerHTML = "";
-    for(const [k,v] of totalsByProduct){
-      const chip = document.createElement("span");
-      chip.className = "tchip";
-      chip.innerHTML = `<span class="sw" style="background:${v.hex}"></span><strong>${k}</strong> ${v.litros.toLocaleString()} L`;
-      totales.appendChild(chip);
-    }
-
-    summary.textContent = `${tanks.length} tanques`;
+      </div>`;
+    el.addEventListener("click", ()=>loadHistorico(tid));
+    return el;
   }
 
-  async function fetchJSON(url){
-    const r = await fetch(url);
-    if(!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-    return await r.json();
-  }
-
-  async function loadArticulos(){
-    const j = await fetchJSON("/api/articulos");
-    allArticulos = j.rows || j;
-    byArticulo.clear(); byArticuloAlm.clear();
-    for(const a of allArticulos){
-      const cod = (a.CODIGO||"").toString().trim();
-      const alm = (a.ALMACEN||"").toString().trim();
-      if(cod){
-        byArticulo.set(cod, a);
-        if(alm) byArticuloAlm.set(`${alm}|${cod}`, a);
-      }
+  async function loadTanques(){
+    const url = currentAlm ? `/api/tanques_norm?almacen=${encodeURIComponent(currentAlm)}` : "/api/tanques_norm";
+    const res = await fetch(url);
+    const js = await res.json();
+    const rows = js.rows || [];
+    tanksGrid.innerHTML = "";
+    if(!rows.length){
+      const div = document.createElement("div");
+      div.textContent = "No hay tanques para mostrar.";
+      tanksGrid.appendChild(div);
+      return;
     }
+    rows.forEach(r => tanksGrid.appendChild(tankCard(r)));
   }
 
-  async function loadAndRender(){
-    summary.textContent = "Cargando…";
-    try{
-      await loadArticulos();
-      const j = await fetchJSON("/api/tanques_norm");
-      const rows = j.rows || j;
-      // Si existe selector de almacén filtramos
-      const selected = almacenSel && almacenSel.value ? almacenSel.value : null;
-      const filtered = selected ? rows.filter(r => r.almacen_id === selected) : rows;
-      render(filtered);
-    }catch(err){
-      console.error(err);
-      summary.textContent = "Error cargando datos";
-    }
+  async function loadHistorico(tanqueId){
+    histInfo.textContent = `Cargando histórico ${tanqueId}…`;
+    histTableBody.innerHTML = "";
+    const res = await fetch(`/api/calibraciones/ultimas?tanque_id=${encodeURIComponent(tanqueId)}&n=20`);
+    const js = await res.json();
+    histInfo.textContent = `Registros: ${js.count||0}`;
+    (js.rows||[]).forEach(r=>{
+      const tr = document.createElement("tr");
+      const fecha = (r.FECHAMOD || r.FECHA || "").toString().slice(0,19);
+      tr.innerHTML = `
+        <td>${fecha}</td>
+        <td>${r.ALMACEN||""}</td>
+        <td>${r.TANQUE||""}</td>
+        <td>${r.DESCRI||r.ARTICULO||""}</td>
+        <td>${(r.LITROS!==undefined)? fmt(r.LITROS,0) : "-"}</td>
+        <td>${(r.TEMPERA!==undefined)? fmt(r.TEMPERA,1) : "-"}</td>`;
+      histTableBody.appendChild(tr);
+    });
   }
 
-  refreshBtn && refreshBtn.addEventListener("click", loadAndRender);
-  prevBtn && prevBtn.addEventListener("click", ()=>{
-    const opts = Array.from(almacenSel.options).map(o=>o.value);
-    const i = opts.indexOf(almacenSel.value);
-    almacenSel.value = opts[Math.max(0, i-1)] || opts[0];
-    loadAndRender();
+  // UI events
+  refreshBtn.addEventListener("click", ()=>{
+    loadTanques();
   });
-  nextBtn && nextBtn.addEventListener("click", ()=>{
-    const opts = Array.from(almacenSel.options).map(o=>o.value);
-    const i = opts.indexOf(almacenSel.value);
-    almacenSel.value = opts[Math.min(opts.length-1, i+1)] || opts.at(-1);
-    loadAndRender();
+  verTodosBtn.addEventListener("click", ()=>{
+    currentAlm = null;
+    almacenSel.value = "";
+    loadTanques();
   });
-  almacenSel && almacenSel.addEventListener("change", loadAndRender);
+  almacenSel.addEventListener("change", ()=>{
+    currentAlm = almacenSel.value || null;
+    loadTanques();
+  });
 
-  window.addEventListener("load", loadAndRender);
+  // boot
+  (async function boot(){
+    await loadAlmacenes();
+    await loadTanques();
+  })();
 })();

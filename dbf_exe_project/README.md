@@ -1,9 +1,15 @@
-# PROCONSI · Tanques (Vista avanzada)
+# PROCONSI · SondasTanques (DBF → Flask → EXE)
 
-## Estructura
+**Objetivo:** ejecutar una app local (doble clic) que lee tus DBF (`FFALMA.DBF`, `FFARTI.DBF`, `FFTANQ.DBF`, `FFCALA.DBF`) desde **la misma carpeta** donde está el `exe`, pinta los **tanques** con tu **estilo**, usa **el color del producto** desde `FFARTI.COLORPRODU`, y muestra **histórico** al hacer clic.
+
+---
+
+## Carpetas / ficheros
+
 ```
 dbf_exe_project/
 ├─ app.py
+├─ requirements.txt
 ├─ templates/
 │  └─ sondastanques_mod.html
 └─ static/
@@ -11,38 +17,92 @@ dbf_exe_project/
    └─ sondastanques_mod.js
 ```
 
-Coloca **FFALMA.DBF**, **FFARTI.DBF**, **FFTANQ.DBF** y **FFCALA.DBF** en esta misma carpeta junto al `app.py` / `app.exe`.
+> **Importante:** El frontend carga los assets con `url_for('static',...)` para evitar el problema de “solo veo texto plano”.
 
-## Ejecutar en local (modo desarrollo)
-1. Instala dependencias:
+---
+
+## Cómo ejecutarlo en local (sin EXE)
+
+1. Instala Python 3.10+ en Windows.
+2. Abre una consola en `dbf_exe_project`.
+3. Instala dependencias:
+
    ```bash
    pip install -r requirements.txt
    ```
-2. Lanza:
+
+4. Copia **tus DBF** (`FFALMA.DBF`, `FFARTI.DBF`, `FFTANQ.DBF`, `FFCALA.DBF`) en **esta misma carpeta**.
+5. Lanza la app:
+
    ```bash
    python app.py
    ```
-3. Abre: http://127.0.0.1:5000
 
-## Empaquetar a EXE (PyInstaller)
+6. Se abre el navegador en `http://127.0.0.1:5000`.
+
+---
+
+## Cómo generar el EXE (PyInstaller)
+
+> Consejo: primero genera **consola** (sin `--noconsole`) para ver errores si algo falla. Cuando todo funcione, puedes ocultar la consola con `--noconsole`.
+
 ```bash
 pip install pyinstaller
-pyinstaller --noconfirm --onefile --add-data "templates;templates" --add-data "static;static" app.py -n "PROCONSI-Tanques"
+pyinstaller --onefile --name "PROCONSI-Tanques" app.py
 ```
-El ejecutable quedará en `dist/PROCONSI-Tanques.exe`. Copia ese exe **junto a los DBF**.
 
-> **Importante (colores):** los colores de producto ahora se toman de **FFARTI.COLORPRODU** (no de FFALMA). Si ese campo no existe o está 0, se aplica un color por defecto según el producto.
+- El ejecutable quedará en `dist/PROCONSI-Tanques.exe`.
+- Copia **el EXE** y **los DBF** a la misma carpeta en tu servidor/local.
+- Doble clic al EXE → abre `http://127.0.0.1:5000`.
 
-## Funciones clave
-- **/api/tanques_norm** → filas normalizadas con `color_hex` calculado desde FFARTI.COLORPRODU.
-- **Selector de almacenes** + **Ver todos** (intercept en el HTML) para aplanar vista.
-- **Refrescar** datos sin recargar la página.
-- **Panel de histórico** (estructura preparada; puedes engancharlo a `/api/calibraciones/ultimas`).
+**Icono / nombre:** cuando esté listo, añade `--icon assets/proconsi.ico` y cambia `--name` al definitivo.
 
-## Problemas comunes
-- **Se cierra el EXE al abrir** → crea un `run.bat` (incluido) y ejecútalo para ver el log; si falta un DBF o una DLL, saldrá el error.
-- **127.0.0.1 rechazó la conexión** → el servidor no arrancó. Ejecuta `run.bat` o `python app.py` y revisa mensajes.
-- **Estilos no aplican** → comprueba que la página apunte a `/static/sondastanques_mod.css` y `/static/sondastanques_mod.js` (ya configurado).
+---
 
-## Licencia
-Interno PROCONSI.
+## Endpoints claves
+
+- `GET /api/tanques_norm` → lista de tanques **normalizados**:
+  - `color_hex` **sale de `FFARTI.COLORPRODU`** (no del `COLORFONDO` del almacén).
+- `GET /api/calibraciones/ultimas?tanque_id=ALM-TANQUE&n=20`
+- `GET /api/almacenes`
+- `GET /api/articulos`
+
+> El backend intenta detectar nombres de campos típicos (`ALMACEN`, `TANQUE`, `ARTICULO`, `CAPACIDAD`, `STOCK`, `TEMPERA`, etc.) y es tolerante a variantes.
+
+---
+
+## Problemas frecuentes (y solución)
+
+- **Se cierra el EXE nada más abrir.**
+  - Genera primero con consola: `pyinstaller --onefile app.py` y ejecuta desde CMD para ver el error.
+  - Revisa `app.log` / `error.log` en la misma carpeta.
+  - Verifica que los 4 DBF existen y **no están bloqueados** por otro proceso.
+
+- **Veo la página sin estilos.**
+  - Comprueba que el HTML usa `{{ url_for('static', filename='...') }}` (ya aplicado en este proyecto).
+  - No abras el HTML directamente con doble clic; **siempre** vía `http://127.0.0.1:5000`.
+
+- **Colores incorrectos.**
+  - Ahora se toma de `FFARTI.COLORPRODU`. Si ese campo no existe o es 0, el backend aplica un color por defecto según producto.
+
+- **Filtrar por almacén.**
+  - Usa el selector de la cabecera o llama a `/api/tanques_norm?almacen=0001`.
+
+---
+
+## Presentación rápida
+- Panel de tanques con aro de capacidad y porcentaje.
+- Clic en un tanque → tabla **Histórico** (últimos movimientos en `FFCALA`).
+- Selector de **Almacén** y botón **Refrescar**.
+- Leyenda de estados: OK (≥50%), Advertencia (≥20%), Bajo (<20%).
+
+---
+
+## Seguridad y firma de código (cuando proceda)
+Para evitar avisos de Windows SmartScreen al distribuir el EXE:
+- Firma el ejecutable con un **certificado de firma de código** (Standard/Ev Code Signing).
+- Opcionalmente, crea un **instalador MSI** firmado en lugar de suelto.
+
+---
+
+© PROCONSI

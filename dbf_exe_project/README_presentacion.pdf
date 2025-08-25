@@ -1,0 +1,21 @@
+%PDF-1.4
+%ÿÿÿÿ
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Count 1 /Kids [3 0 R] >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj
+4 0 obj << /Length 575 >> stream
+BT /F1 16 Tf 72 740 Td (PROCONSI \267 SondasTanques) Tj T* 72 720 Td (PROCONSI · SondasTanques) Tj 72 700 Td () Tj 72 680 Td ( Doble clic en el EXE con los DBF \(FFALMA, FFARTI, FFTANQ, FFCALA\) en la misma carpeta.) Tj 72 660 Td ( Colores tomados de FFARTI.COLORPRODU.) Tj 72 640 Td ( Selector de Almacén, Refrescar y panel Histórico por tanque.) Tj 72 620 Td ( Endpoints: /api/tanques_norm, /api/almacenes, /api/articulos, /api/calibraciones/ultimas.) Tj 72 600 Td () Tj 72 580 Td (Nota: si el EXE se cierra, ejecute primero con consola y revise app.log / error.log.) Tj ET
+endstream endobj
+5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj
+xref
+0 6
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000000873 00000 n 
+trailer << /Size 6 /Root 1 0 R >>
+startxref
+943
+%%EOF
