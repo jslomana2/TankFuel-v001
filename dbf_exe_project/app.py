@@ -1,344 +1,175 @@
-# -*- coding: utf-8 -*-
-"""
-PROCONSI – Tanques (Flask + DBF)
-- Lee FFALMA.DBF, FFARTI.DBF, FFTANQ.DBF, FFCALA.DBF desde el MISMO directorio que el .exe/.py
-- Endpoints:
-    /                                   -> UI (templates/sondastanques_mod.html)
-    /api/almacenes                      -> JSON con almacenes
-    /api/articulos                      -> JSON con artículos (con color_hex desde FFARTI.COLORPRODU)
-    /api/tanques_norm                   -> JSON tanques normalizados (usa COLORPRODU de FFARTI)
-    /api/calibraciones/ultimas?tanque_id=ALM[-TANQUE]&n=10  -> últimos n movimientos de FFCALA
-"""
-import os, sys, json, logging, webbrowser
-from datetime import date, datetime
-from decimal import Decimal
-from functools import lru_cache
-from flask import Flask, jsonify, render_template, request
 
-APP_DIR = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__))
-DBF_DIR = APP_DIR  # los DBF están junto al exe
+import os
+import sys
+import logging
+from flask import Flask, jsonify, render_template, request, send_from_directory
+from dbfread import DBF
+from datetime import datetime
 
-LOG_FILE = os.path.join(APP_DIR, "app.log")
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.FileHandler(LOG_FILE, encoding="utf-8"), logging.StreamHandler()]
+    format="%(asctime)s [%(levelname)s] %(message)s"
 )
-log = logging.getLogger("proconsi-tanques")
+log = logging.getLogger("app")
 
-try:
-    from dbfread import DBF
-except Exception as e:
-    DBF = None
-    log.warning("dbfread no disponible. Instale con: pip install dbfread")
+app = Flask(__name__, static_folder="static", template_folder="templates")
 
-# ----------------------- util -----------------------
-def _to_int(v, default=0):
+# ---------- Utilidades ----------
+def exe_dir():
+    # Directorio del ejecutable cuando se empaqueta con PyInstaller
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    # Ejecución normal (no congelado)
+    return os.path.dirname(os.path.abspath(__file__))
+
+SEARCH_DIRS = [
+    os.getcwd(),
+    exe_dir(),
+    os.path.join(exe_dir(), "dist"),
+    os.path.join(exe_dir(), "dbf_exe_project"),
+]
+
+def find_file(fname):
+    for d in SEARCH_DIRS:
+        p = os.path.join(d, fname)
+        if os.path.isfile(p):
+            return p
+    log.warning("DBF no encontrado: %s", os.path.join(exe_dir(), fname))
+    return None
+
+def read_dbf(fname, encoding="latin-1"):
+    path = find_file(fname)
+    if not path:
+        return []
     try:
-        if isinstance(v, float):
-            return int(v)
-        return int(str(v).strip())
+        rows = [dict(r) for r in DBF(path, load=True, encoding=encoding, char_decode_errors='ignore')]
+        return rows
+    except Exception as e:
+        log.exception("Error leyendo %s: %s", fname, e)
+        return []
+
+def safe_float(v, default=0.0):
+    try:
+        if v is None: return default
+        if isinstance(v, (int, float)): return float(v)
+        v = str(v).strip().replace(',', '.')
+        return float(v) if v else default
     except Exception:
         return default
 
-def _to_float(v, default=0.0):
+def color_from_int_to_hex(c):
+    """Convierte un entero Windows RGB (BGR) o decimal a #RRGGBB. 
+       FFARTI.COLORPRODU suele guardar decimal de COLORREF (BGR)."""
     try:
-        return float(str(v).replace(',', '.'))
-    except Exception:
-        return default
-
-def _to_str(v, default=""):
-    try:
-        s = "" if v is None else str(v)
-        return s.strip()
-    except Exception:
-        return default
-
-def _first(rec, keys, default=None):
-    for k in keys:
-        if k in rec and rec[k] not in (None, ""):
-            return rec[k]
-    return default
-
-def _color_hex_from_number(n):
-    try:
-        n = _to_int(n, 0)
-        n = max(0, min(n, 0xFFFFFF))
-        return f"#{n:06x}"
+        c = int(float(c))
+        # COLORREF almacena 0x00BBGGRR -> convertimos a RRGGBB
+        r = c & 0xFF
+        g = (c >> 8) & 0xFF
+        b = (c >> 16) & 0xFF
+        return f"#{r:02X}{g:02X}{b:02X}"
     except Exception:
         return None
 
-class SafeJSON(json.JSONEncoder):
-    def default(self, o):
-        if isinstance(o, (date, datetime)):
-            return o.isoformat()
-        if isinstance(o, Decimal):
-            return float(o)
-        try:
-            return str(o)
-        except Exception:
-            return None
-
-def json_resp(obj):
-    return app.response_class(
-        response=json.dumps(obj, ensure_ascii=False, cls=SafeJSON),
-        status=200,
-        mimetype="application/json"
-    )
-
-def _read_dbf(file_name):
-    """Lee un DBF del directorio DBF_DIR devolviendo lista de dict con CLAVES EN MAYÚSCULAS."""
-    path = os.path.join(DBF_DIR, file_name)
-    if not os.path.exists(path):
-        log.warning("DBF no encontrado: %s", path)
-        return []
-    if DBF is None:
-        log.error("dbfread no instalado. No puedo leer %s", path)
-        return []
-    try:
-        # cp1252 suele ser correcto; si no, latin-1
-        table = DBF(path, load=True, encoding="cp1252", ignore_missing_memofile=True)
-    except Exception:
-        table = DBF(path, load=True, encoding="latin-1", ignore_missing_memofile=True)
-
-    rows = []
-    for r in table:
-        # normaliza claves a MAYÚSCULAS
-        rd = {str(k).upper(): r[k] for k in r}
-        rows.append(rd)
-    return rows
-
-# ----------------------- cachés -----------------------
-@lru_cache(maxsize=1)
-def load_almacenes():
-    return _read_dbf("FFALMA.DBF")
-
-@lru_cache(maxsize=1)
-def load_articulos():
-    return _read_dbf("FFARTI.DBF")
-
-@lru_cache(maxsize=1)
-def load_tanques_raw():
-    return _read_dbf("FFTANQ.DBF")
-
-@lru_cache(maxsize=1)
-def load_calibraciones():
-    return _read_dbf("FFCALA.DBF")
-
-def invalidate_caches():
-    load_almacenes.cache_clear()
-    load_articulos.cache_clear()
-    load_tanques_raw.cache_clear()
-    load_calibraciones.cache_clear()
-
-def map_articulos_by_key():
-    """Devuelve dos índices: por (ALMACEN,CODIGO) y por CODIGO (último visto)"""
-    by_ac = {}
-    by_cod = {}
-    for a in load_articulos():
-        alm = _to_str(_first(a, ["ALMACEN","CODALM","ALM"]))
-        cod = _to_str(_first(a, ["CODIGO","ARTICULO","CODART"]))
-        if alm and cod:
-            by_ac[(alm, cod)] = a
-        if cod:
-            by_cod[cod] = a
-    return by_ac, by_cod
-
-def map_almacenes_by_codigo():
-    d = {}
-    for a in load_almacenes():
-        cod = _to_str(_first(a, ["CODIGO","ALMACEN","CODALM"]))
-        if cod:
-            d[cod] = a
-    return d
-
-def articulo_color_hex(almacen, articulo):
-    by_ac, by_cod = map_articulos_by_key()
-    rec = by_ac.get((almacen, articulo)) or by_cod.get(articulo) or {}
-    coln = _first(rec, ["COLORPRODU","COLORPRODUC","COLORPRODUCION","COLORPRODU_"])
-    hx = _color_hex_from_number(coln) if coln not in (None, "") else None
-    return hx
-
-def normalize_tanque_record(rec):
-    """Devuelve un dict unificado para un tanque."""
-    almacen = _to_str(_first(rec, ["ALMACEN","CODALM","ALM"]))
-    tanque_codigo = _to_str(_first(rec, ["TANQUE","CODIGO","CODTANQ","IDTANQUE"]))
-    descripcion = _to_str(_first(rec, ["DESCRI","DESCRIPCION","DESC"]))
-    capacidad = _to_float(_first(rec, ["CAPACIDAD","CAPACIDAD_L","CAPACIDADL","CAPACIDAD_T"], 0.0))
-    stock = _to_float(_first(rec, ["STOCK","STOCK_L","STOCKACT","STOCKL"], 0.0))
-    stock15 = _to_float(_first(rec, ["STOCK15","STOCK_15","STOCK15L"], 0.0))
-    temp = _first(rec, ["TEMPULT","TEMPERA","TEMPERATURA","TEMP_ULTIMA"])
-    articulo = _to_str(_first(rec, ["ARTICULO","PRODUCTO","CODART","CODPROD","PRODUCTO_ID"]))
-
-    alm_map = map_almacenes_by_codigo()
-    alm_nombre = _to_str(_first(alm_map.get(almacen, {}), ["NOMBRE","ALMACEN_NOMBRE","NOM"], ""))
-
-    # Busca datos del artículo
-    by_ac, by_cod = map_articulos_by_key()
-    art = by_ac.get((almacen, articulo)) or by_cod.get(articulo) or {}
-    prod_nombre = _to_str(_first(art, ["DESCRI","DESCRIPCION","NOMBRE","DESCRICOM"], ""))
-    color_hex = articulo_color_hex(almacen, articulo) or None
-
-    return {
-        "almacen_id": almacen,
-        "almacen_nombre": alm_nombre,
-        "tanque_codigo": tanque_codigo,
-        "tanque_id": f"{almacen}-{tanque_codigo}" if almacen and tanque_codigo else tanque_codigo or almacen,
-        "descripcion": descripcion or (f"TANQUE {articulo}" if articulo else "TANQUE"),
-        "producto_id": articulo,
-        "producto_nombre": prod_nombre,
-        "capacidad_l": capacidad,
-        "stock_l": stock,
-        "stock15_l": stock15,
-        "temp_ultima_c": temp if isinstance(temp, (int,float,str)) else None,
-        "color_hex": color_hex,
-    }
-
-def build_tanques_norm():
-    rows = load_tanques_raw()
-    norm = [normalize_tanque_record(r) for r in rows] if rows else []
-
-    # Si no hay FFTANQ, intenta construir desde FFARTI como fallback
-    if not norm:
-        for a in load_articulos():
-            alm = _to_str(_first(a, ["ALMACEN","CODALM","ALM"]))
-            cod = _to_str(_first(a, ["CODIGO","ARTICULO","CODART"]))
-            if not (alm and cod):
-                continue
-            norm.append({
-                "almacen_id": alm,
-                "almacen_nombre": "",
-                "tanque_codigo": cod,
-                "tanque_id": f"{alm}-{cod}",
-                "descripcion": f"TANQUE {cod}",
-                "producto_id": cod,
-                "producto_nombre": _to_str(_first(a, ["DESCRI","DESCRIPCION","NOMBRE"], "")),
-                "capacidad_l": _to_float(_first(a, ["CAPACIDAD","CAPACIDAD_L"], 0.0)),
-                "stock_l": _to_float(_first(a, ["STOCK","STOCK_L"], 0.0)),
-                "stock15_l": _to_float(_first(a, ["STOCK15","STOCK_15"], 0.0)),
-                "temp_ultima_c": _first(a, ["TEMPULT","TEMPMED","TEMPERATURA"], None),
-                "color_hex": _color_hex_from_number(_first(a, ["COLORPRODU"], 0)),
-            })
-
-    return {"count": len(norm), "rows": norm}
-
-# ----------------------- web -----------------------
-app = Flask(__name__, static_folder="static", template_folder="templates")
-
+# ---------- Rutas ----------
 @app.route("/")
-def index():
+def home():
     return render_template("sondastanques_mod.html")
 
 @app.route("/api/almacenes")
 def api_almacenes():
-    invalidate = request.args.get("invalidate") == "1"
-    if invalidate: invalidate_caches()
-    rows = load_almacenes()
-    # añade color_hex si hubiera COLORFONDO (aunque por diseño usamos COLORPRODU de artículo)
-    out = []
-    for r in rows:
-        d = {k: r[k] for k in r}
-        col = _first(r, ["COLORFONDO","COLOR"])
-        if col not in (None, ""):
-            d["color_hex"] = _color_hex_from_number(col)
-        out.append(d)
-    return json_resp({"count": len(out), "rows": out})
-
-@app.route("/api/articulos")
-def api_articulos():
-    invalidate = request.args.get("invalidate") == "1"
-    if invalidate: invalidate_caches()
-    rows = load_articulos()
-    for r in rows:
-        col = _first(r, ["COLORPRODU"])
-        r["color_hex"] = _color_hex_from_number(col) if col not in (None, "") else None
-    return json_resp({"count": len(rows), "rows": rows})
+    rows = read_dbf("FFALMA.DBF")
+    return jsonify({"count": len(rows), "rows": rows})
 
 @app.route("/api/tanques_norm")
 def api_tanques_norm():
-    invalidate = request.args.get("invalidate") == "1"
-    if invalidate: invalidate_caches()
-    data = build_tanques_norm()
-    # filtros opcionales
-    alm = request.args.get("almacen")
-    if alm:
-        rows = [r for r in data["rows"] if r.get("almacen_id") == alm]
-        return json_resp({"count": len(rows), "rows": rows})
-    return json_resp(data)
+    tanq = read_dbf("FFTANQ.DBF")
+    arti = read_dbf("FFARTI.DBF")
+    # Índice por CODIGO de artículo
+    idx_arti = {}
+    for a in arti:
+        code = str(a.get("CODIGO") or a.get("COD_ART") or "").strip()
+        if code:
+            idx_arti[code] = a
+
+    out = []
+    for t in tanq:
+        alm = str(t.get("ALMACEN") or t.get("ALM") or "").strip()
+        tid = str(t.get("TANQUE") or t.get("CODIGO") or t.get("TANQ") or "").strip()
+        prod_code = str(t.get("ARTICULO") or t.get("CODART") or "").strip()
+        art = idx_arti.get(prod_code, {})
+        # Campos del producto (color y nombre)
+        prod_nombre = (art.get("DESCRI") or art.get("DESCRIPCION") or "").strip()
+        color_produ = art.get("COLORPRODU") or art.get("COLOR_PRODU") or art.get("COLOR")
+        color_hex = color_from_int_to_hex(color_produ) or "#2AA8FF"
+
+        capacidad = safe_float(t.get("CAPACIDAD") or t.get("CAPACIDAD_L") or art.get("CAPACIDAD"))
+        # Stock: si el tanque trae stock propio úsalo; si no, usa stock del artículo (mejor que nada)
+        stock_l = safe_float(t.get("STOCK") or t.get("STOCK_L"))
+        if stock_l == 0.0:
+            stock_l = safe_float(art.get("STOCK"))
+
+        temp = t.get("TEMPERA") or t.get("TEMPULT") or art.get("TEMPULT")
+        temp_c = None
+        try:
+            temp_c = float(temp) if temp not in (None, "") else None
+        except:
+            temp_c = None
+
+        out.append({
+            "almacen_id": alm,
+            "almacen_nombre": alm,  # el front lo puede sustituir si hace falta
+            "tanque_id": f"{alm}-{tid}" if alm and tid else tid or alm,
+            "tanque_codigo": tid,
+            "producto_id": prod_code,
+            "producto_nombre": prod_nombre,
+            "capacidad_l": capacidad,
+            "stock_l": stock_l,
+            "stock15_l": safe_float(t.get("STOCK15") or art.get("STOCK15")),
+            "temp_ultima_c": temp_c,
+            "color_hex": color_hex
+        })
+
+    return jsonify({"count": len(out), "rows": out})
 
 @app.route("/api/calibraciones/ultimas")
-def api_calibraciones_ultimas():
-    invalidate = request.args.get("invalidate") == "1"
-    if invalidate: invalidate_caches()
-    q = _to_str(request.args.get("tanque_id"))
-    n = int(request.args.get("n") or 10)
-    rows = load_calibraciones()
+def api_calibraciones():
+    n = int(request.args.get("n", 10))
+    tanque = (request.args.get("tanque") or request.args.get("tanque_id") or "").strip()
+    alm = request.args.get("almacen") or ""
+    rows = read_dbf("FFCALA.DBF")
+    # Ordenamos por FECHAMOD o FECHA descendente
+    def parse_dt(r):
+        for k in ("FECHAMOD","FECHA","FEC_MOD"):
+            v = r.get(k)
+            if v in (None, ""): 
+                continue
+            try:
+                if isinstance(v, datetime): 
+                    return v
+                # Intento convert
+                return datetime.fromisoformat(str(v))
+            except Exception:
+                pass
+        return datetime.min
+    rows.sort(key=parse_dt, reverse=True)
+    # Filtrado si viene tanque/almacen
+    if tanque:
+        rows = [r for r in rows if str(r.get("TANQUE") or "").strip() == tanque]
+    if alm:
+        rows = [r for r in rows if str(r.get("ALMACEN") or "").strip() == alm]
+    rows = rows[:n]
+    return jsonify({"count": len(rows), "file": find_file("FFCALA.DBF") or "", "rows": rows})
 
-    # Filtra por ALMACEN o por (ALMACEN-TANQUE)
-    filt = []
-    alm = None; tan = None
-    if "-" in q:
-        alm, tan = q.split("-", 1)
-    else:
-        alm = q
-
-    for r in rows:
-        r_alm = _to_str(_first(r, ["ALMACEN","ALM"]))
-        r_tan = _to_str(_first(r, ["TANQUE","CODTANQUE","TANQ"]))
-        if alm and tan:
-            if r_alm == alm and r_tan == tan:
-                filt.append(r)
-        elif alm:
-            if r_alm == alm:
-                filt.append(r)
-
-    # Ordena por FECHAMOD desc si existe; si no, por FECHA + HORA
-    def keyf(x):
-        fm = _first(x, ["FECHAMOD"])
-        if isinstance(fm, (datetime, date)):
-            return fm
-        f = _first(x, ["FECHA"])
-        h = _first(x, ["HORA"])
-        try:
-            if isinstance(f, (datetime,date)):
-                fdt = datetime.fromordinal(f.toordinal())
-            else:
-                fdt = None
-            if isinstance(h, str) and h:
-                # HH:MM
-                hh, mm = (h.split(":") + ["0","0"])[:2]
-                hm = datetime.now().replace(hour=int(hh), minute=int(mm), second=0, microsecond=0)
-            else:
-                hm = None
-            return (fdt or datetime.min).replace(hour=(hm.hour if hm else 0), minute=(hm.minute if hm else 0))
-        except Exception:
-            return datetime.min
-
-    filt.sort(key=keyf, reverse=True)
-    return json_resp({"count": len(filt[:n]), "file": os.path.join(DBF_DIR, "FFCALA.DBF"), "rows": filt[:n]})
-
-# ----------------------- main -----------------------
-def _open_browser_when_ready(port):
-    import threading, time
-    def op():
-        time.sleep(0.8)
-        try:
-            webbrowser.open(f"http://127.0.0.1:{port}/")
-        except Exception:
-            pass
-    threading.Thread(target=op, daemon=True).start()
+# Favicon opcional (no bloquea si no existe)
+@app.route('/favicon.ico')
+def favicon():
+    fav = os.path.join(app.static_folder, "favicon.ico")
+    if os.path.exists(fav):
+        return send_from_directory(app.static_folder, "favicon.ico")
+    return ('', 404)
 
 if __name__ == "__main__":
-    try:
-        port = int(os.environ.get("PORT") or 5000)
-        _open_browser_when_ready(port)
-        debug = bool(int(os.environ.get("FLASK_DEBUG", "0")))
-        log.info("Iniciando servidor en http://127.0.0.1:%s", port)
-        from werkzeug.serving import run_simple
-        # Servidor integrado (simple y robusto para local). No activar auto-reload en exe.
-        run_simple("127.0.0.1", port, app, use_reloader=debug, use_debugger=debug, threaded=True)
-    except Exception as e:
-        err_path = os.path.join(APP_DIR, "error.log")
-        with open(err_path, "a", encoding="utf-8") as fh:
-            fh.write(f"{datetime.now().isoformat()}  {repr(e)}\n")
-        raise
+    addr = "127.0.0.1"
+    port = int(os.environ.get("PORT", "5000"))
+    log.info("Iniciando servidor en http://%s:%s", addr, port)
+    app.run(host=addr, port=port, debug=False)

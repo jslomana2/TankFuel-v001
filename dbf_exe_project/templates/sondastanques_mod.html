@@ -1,52 +1,48 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Proconsi · SondasTanques</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='sondastanques_mod.css') }}">
+  <meta charset="utf-8"/>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tanques – Vista avanzada</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='sondastanques_mod.css') }}"/>
 </head>
 <body>
-  <header class="app-header">
-    <div class="brand">
-      <div class="logo">⛽</div>
-      <div class="title">
-        <h1>SONDASTANQUES</h1>
-        <small>Panel de tanques · Proconsi</small>
+  <div class="wrap">
+    <header>
+      <div class="h-inner">
+        <a class="brand" href="#" rel="noopener">
+          <img src="/static/favicon.png" alt="Logo" onerror="this.style.display='none'">
+        </a>
+        <div class="title">Tanques · Vista avanzada</div>
+        <div class="pill" id="summary">Cargando…</div>
+        <div class="spacer"></div>
+        <div class="ctrls">
+          <button id="alarmsBtn" title="Ir a alarmas">🔔 Alarmas</button>
+          <button id="refreshBtn" title="Refrescar">⟳ Refrescar</button>
+          <button id="prevBtn" title="Almacén anterior">←</button>
+          <select id="almacenSel"></select>
+          <button id="nextBtn" title="Almacén siguiente">→</button>
+        </div>
       </div>
-    </div>
-    <div class="actions">
-      <button id="refreshBtn" class="btn">⟳ Refrescar</button>
-      <label class="sel-wrap">
-        Almacén:
-        <select id="almacenSel"></select>
-      </label>
-      <button id="verTodosBtn" class="btn">Ver todos</button>
-    </div>
-  </header>
+      <div class="h-sub">
+        <label class="chk-all"><input id="allToggle" type="checkbox"/><span>Ver todos los almacenes</span></label>
+      </div>
+    </header>
 
-  <main class="layout">
-    <section>
-      <div id="tanksGrid" class="grid"></div>
-    </section>
-    <aside id="histPanel" class="hist">
-      <h3>Histórico</h3>
-      <div id="histInfo" class="hist-info">Selecciona un tanque…</div>
+    <div id="grid" class="grid"></div>
+    <div id="totales" aria-label="Totales por producto"></div>
+
+    <footer>
       <div class="legend">
-        <span class="chip"><span class="dot" style="background:var(--ok)"></span>OK</span>
-        <span class="chip"><span class="dot" style="background:var(--warn)"></span>Advertencia</span>
-        <span class="chip"><span class="dot" style="background:var(--bad)"></span>Bajo</span>
+        <span class="chip"><span class="dot" style="background:var(--ok)"></span> Normal</span>
+        <span class="chip"><span class="dot" style="background:var(--warn)"></span> Atención</span>
+        <span class="chip"><span class="dot" style="background:var(--bad)"></span> Alarma</span>
+        <span class="chip"><span class="dot" style="background:var(--water)"></span> Agua</span>
       </div>
-      <table id="histTable">
-        <thead>
-          <tr>
-            <th>Fecha</th><th>Almacén</th><th>Tanque</th><th>Producto</th><th>Litros</th><th>T(°C)</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </aside>
-  </main>
+      <div id="footerInfo"></div>
+    </footer>
+  </div>
 
   <script src="{{ url_for('static', filename='sondastanques_mod.js') }}"></script>
 </body>
