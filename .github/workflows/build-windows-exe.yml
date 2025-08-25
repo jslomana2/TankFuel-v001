@@ -4,42 +4,34 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-windows:
+  build:
     runs-on: windows-latest
-
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install deps
         run: |
+          cd dbf_exe_project
           python -m pip install --upgrade pip
-          pip install -r dbf_exe_project/requirements.txt
-          pip install pyinstaller
+          pip install -r requirements.txt pyinstaller
 
-      - name: Build EXE with PyInstaller
-        working-directory: dbf_exe_project
+      - name: Build EXE
         run: |
-          pyinstaller app.py `
-            --name "PROCONSI-Tanques" `
-            --onefile `
-            --console `
-            --add-data "templates;templates" `
-            --add-data "static;static"
+          cd dbf_exe_project
+          pyinstaller --noconfirm --onefile ^
+            --name PROCONSI-Tanques ^
+            --add-data "templates;templates" ^
+            --add-data "static;static" ^
+            app.py
+          dir dist
 
-      - name: Debug run of the EXE (log output only)
-        working-directory: dbf_exe_project/dist
-        run: |
-          .\PROCONSI-Tanques.exe || echo "EXE run failed"
-
-      - name: Upload EXE as artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: proconsi-tanques-exe
+          name: PROCONSI-Tanques
           path: dbf_exe_project/dist/PROCONSI-Tanques.exe
-          if-no-files-found: error
