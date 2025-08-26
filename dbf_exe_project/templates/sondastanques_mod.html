@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tanques – Vista avanzada (MODERNO interno)</title>
+  <link rel="stylesheet" href="/static/sondastanques_mod.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>PROCONSI · SondaTanques</h1>
+    <div class="controls">
+      <label>Almacén:
+        <select id="almacenSelect"></select>
+      </label>
+      <button id="refreshBtn">Refrescar</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="grid" id="tanquesGrid" aria-live="polite"></section>
+    <aside class="panel" id="panelDetalle">
+      <h2>Detalle</h2>
+      <div id="detalleBody">Pulsa un tanque…</div>
+    </aside>
+  </main>
+
+  <script src="/static/sondastanques_mod.js"></script>
+</body>
+</html>
