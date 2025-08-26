@@ -1,6 +1,5 @@
 
 import os, sys
-from collections import defaultdict
 from pathlib import Path
 from flask import Flask, jsonify, render_template, request
 from dbfread import DBF
@@ -9,13 +8,11 @@ APP_NAME = "PROCONSI – Tanques"
 
 FROZEN = bool(getattr(sys, "frozen", False))
 BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
-
-# Template/static resolution both in dev and frozen
 tmpl_dir = (BASE_DIR / "templates") if FROZEN else (Path(__file__).resolve().parent / "templates")
 static_dir = (BASE_DIR / "static") if FROZEN else (Path(__file__).resolve().parent / "static")
 app = Flask(__name__, template_folder=str(tmpl_dir), static_folder=str(static_dir))
 
-# Data path: arg > exe folder > script folder
+# Data path resolution
 if len(sys.argv) > 1:
     DATA_DIR = Path(sys.argv[1])
 elif FROZEN:
@@ -24,6 +21,7 @@ else:
     DATA_DIR = Path(__file__).resolve().parent
 
 def load_table(name):
+    """Load DBF with typical ES encodings and case-insensitive filename."""
     path = (DATA_DIR / f"{name}.DBF")
     if not path.exists():
         for alt in [name.upper(), name.lower(), name.capitalize()]:
@@ -32,7 +30,6 @@ def load_table(name):
                 path = p; break
     if not path.exists():
         raise FileNotFoundError(f"No se encuentra {name}.DBF en {DATA_DIR}")
-    # encodings typical in ES FoxPro
     for enc in ("cp1252", "latin1", "cp850"):
         try:
             return list(DBF(str(path), encoding=enc, ignore_missing_memofile=True))
@@ -40,7 +37,7 @@ def load_table(name):
             continue
     return list(DBF(str(path), encoding="latin1", ignore_missing_memofile=True))
 
-def rows_ci(rows):
+def rows_upper(rows):
     return [{k.upper(): v for k, v in r.items()} for r in rows]
 
 def _flt(x):
@@ -51,16 +48,20 @@ def _flt(x):
     except Exception:
         return None
 
-def _dec_to_hex_color(v, default="#4f8cc9"):
+def color_dec_to_hex_bgr(v, default="#4f8cc9"):
+    """Convert Windows COLORREF decimal (BGR order) to CSS #RRGGBB.
+
+    In FoxPro/VB the decimal packs as 0x00BBGGRR; here we unpack as BGR -> RGB.
+
+    """
     try:
         n = int(v)
-        if n < 0: n = 0
-        n = n & 0xFFFFFF
-        return f"#{n:06X}"
+        r = n & 0xFF
+        g = (n >> 8) & 0xFF
+        b = (n >> 16) & 0xFF
+        return f"#{r:02X}{g:02X}{b:02X}"
     except Exception:
         return default
-
-# ------------------ ROUTES ------------------
 
 @app.route("/")
 def index():
@@ -68,145 +69,141 @@ def index():
 
 @app.route("/api/almacenes")
 def api_almacenes():
+    """Return only warehouses that have tanks in FFTANQ."""
     try:
-        alms = rows_ci(load_table("FFALMA"))
-        out = []
-        for r in alms:
-            cod = r.get("CODIGO")
-            nom = r.get("NOMBRE")
-            if cod is None: 
-                continue
-            out.append({"codigo": str(cod).strip(), "nombre": (str(nom).strip() if nom else str(cod).strip())})
-        out.sort(key=lambda x: x["codigo"])
-        return jsonify({"ok": True, "data": out})
+        tanqs = rows_upper(load_table("FFTANQ"))
+        present = sorted({str((r.get("ALMACEN") or r.get("CODALM") or r.get("CODIGO") or "")).strip() for r in tanqs if (r.get("ALMACEN") or r.get("CODALM") or r.get("CODIGO"))})
+        # Try to map names from FFALMA if available
+        name_by_code = {}
+        try:
+            alms = rows_upper(load_table("FFALMA"))
+            for r in alms:
+                c = str(r.get("CODIGO") or "").strip()
+                n = str(r.get("NOMBRE") or c).strip()
+                if c:
+                    name_by_code[c] = n
+        except Exception:
+            pass
+        data = [{"codigo": c, "nombre": name_by_code.get(c, c)} for c in present]
+        return jsonify({"ok": True, "data": data})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.route("/api/articulos")
 def api_articulos():
+    """Return articles with color converted to HEX. If table has ALMACEN, key by (ALMACEN,CODIGO) as well."""
     try:
-        arts = rows_ci(load_table("FFARTI"))
-        data = []
+        arts = rows_upper(load_table("FFARTI"))
+        out = []
         for r in arts:
-            cod = r.get("CODIGO")
-            nom = r.get("DESCRI") or r.get("DESCRIPCION")
-            color_dec = r.get("COLORPRODU")
-            color = _dec_to_hex_color(color_dec) if color_dec is not None else "#4f8cc9"
-            data.append({"codigo": str(cod).strip(), "nombre": (str(nom).strip() if nom else str(cod).strip()), "color": color})
-        return jsonify({"ok": True, "data": data})
+            cod = str(r.get("CODIGO") or "").strip()
+            nom = (r.get("DESCRI") or r.get("DESCRIPCION") or cod)
+            color = color_dec_to_hex_bgr(r.get("COLORPRODU"))
+            alm = str(r.get("ALMACEN") or "").strip()
+            row = {"codigo": cod, "nombre": str(nom).strip(), "color": color}
+            if alm:
+                row["almacen"] = alm
+            out.append(row)
+        return jsonify({"ok": True, "data": out})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.route("/api/tanques_norm")
 def api_tanques_norm():
-    almacen_filtro = request.args.get("almacen")
+    """Fast tanks listing. No FFCALA scanning here (speed!)."""
+    almacen_filter = request.args.get("almacen")  # show one warehouse when provided
     try:
-        tanqs = rows_ci(load_table("FFTANQ"))
-        arts = rows_ci(load_table("FFARTI"))
-        # Artículo index
-        art_idx = { (a.get("CODIGO")): a for a in arts }
-
-        # Últimas lecturas de FFCALA por tanque (LITROS, LITROS15, TEMPERA)
-        last = {}
+        tanqs = rows_upper(load_table("FFTANQ"))
+        # Build article index by (ALMACEN, CODIGO) first, then by CODIGO
         try:
-            cal = rows_ci(load_table("FFCALA"))
-            by = defaultdict(list)
-            for r in cal:
-                alm = str(r.get("ALMACEN") or "").strip()
-                cod = str(r.get("CODIGO") or "").strip()
-                if not alm or not cod:
-                    continue
-                tid = f"{alm}-{cod}"
-                by[tid].append(r)
-            for tid, rows in by.items():
-                rr = rows[-1]
-                last[tid] = {
-                    "litros": _flt(rr.get("LITROS")),
-                    "litros15": _flt(rr.get("LITROS15")),
-                    "temperatura": _flt(rr.get("TEMPERA"))
-                }
+            arts = rows_upper(load_table("FFARTI"))
+        except Exception:
+            arts = []
+        idx_by_pair = {}
+        idx_by_code = {}
+        for a in arts:
+            cod = str(a.get("CODIGO") or "").strip()
+            alm = str(a.get("ALMACEN") or "").strip()
+            color = color_dec_to_hex_bgr(a.get("COLORPRODU"))
+            name = (a.get("DESCRI") or a.get("DESCRIPCION") or cod)
+            if cod:
+                idx_by_code[cod] = {"producto": str(name).strip(), "color": color}
+            if alm and cod:
+                idx_by_pair[(alm, cod)] = {"producto": str(name).strip(), "color": color}
+
+        # Optional name map for warehouses
+        name_by_code = {}
+        try:
+            alms = rows_upper(load_table("FFALMA"))
+            for r in alms:
+                c = str(r.get("CODIGO") or "").strip()
+                n = str(r.get("NOMBRE") or c).strip()
+                if c:
+                    name_by_code[c] = n
         except Exception:
             pass
 
-        out = []
+        data = []
         for r in tanqs:
             alm = str((r.get("ALMACEN") or r.get("CODALM") or r.get("CODIGO") or "")).strip()
             codtan = str((r.get("CODIGO") or r.get("IDTANQ") or r.get("CODTAN") or "")).strip()
             if not alm or not codtan:
-                # si tu tabla usa otros nombres me lo dices y lo ajusto
                 continue
-            if almacen_filtro and alm != almacen_filtro:
+            if almacen_filter and alm != almacen_filter:
                 continue
-            tanque_id = f"{alm}-{codtan}"
-            art = (r.get("ARTICULO"))
-            artrow = art_idx.get(art)
-            artname = (artrow.get("DESCRI") if artrow else "") or (artrow.get("DESCRIPCION") if artrow else "") or ""
-            color = _dec_to_hex_color(artrow.get("COLORPRODU")) if artrow and artrow.get("COLORPRODU") is not None else "#4f8cc9"
+            art = str((r.get("ARTICULO") or "")).strip()
+            artinfo = idx_by_pair.get((alm, art)) or idx_by_code.get(art) or {"producto": art, "color": "#4f8cc9"}
 
-            nombre = (r.get("DESCRI") or r.get("DESCRIPCION") or f"Tanque {tanque_id}")
             capacidad = _flt(r.get("CAPACIDAD"))
-            # Nivel preferente: STOCK (tanque), si no, última lectura de FFCALA
-            litros = _flt(r.get("STOCK"))
+            volumen = _flt(r.get("STOCK"))
             litros15 = _flt(r.get("STOCK15"))
-            cal_last = last.get(tanque_id, {})
-            if litros is None:
-                litros = cal_last.get("litros")
-            if litros15 is None:
-                litros15 = cal_last.get("litros15")
-            temperatura = cal_last.get("temperatura")
-
             porcentaje = None
-            if capacidad and litros is not None:
+            if capacidad and volumen is not None:
                 try:
-                    porcentaje = max(0.0, min(100.0, (litros / capacidad) * 100.0))
+                    porcentaje = max(0.0, min(100.0, (volumen / capacidad) * 100.0))
                 except Exception:
                     porcentaje = None
 
-            out.append({
-                "tanque_id": tanque_id,
+            data.append({
+                "tanque_id": f"{alm}-{codtan}",
                 "almacen": alm,
-                "articulo": str(art) if art is not None else "",
-                "articulo_nombre": artname,
-                "color": color,
-                "nombre": str(nombre),
+                "almacen_nombre": name_by_code.get(alm, alm),
+                "producto": artinfo["producto"],
+                "color": artinfo["color"],
+                "nombre": str((r.get("DESCRI") or r.get("DESCRIPCION") or f"Tanque {codtan}")),
                 "capacidad": capacidad,
-                "litros": litros,
+                "volumen": volumen,
                 "litros15": litros15,
                 "porcentaje": porcentaje,
-                "agua": None,            # de momento fuera
-                "temperatura": temperatura
+                "agua": None,
+                "temperatura": None
             })
-        return jsonify({"ok": True, "data": out})
+        return jsonify({"ok": True, "data": data})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.route("/api/calibraciones/ultimas")
 def api_calibraciones():
-    tanque_id = request.args.get("tanque_id")  # esperado formato ALMACEN-CODIGO
-    n = int(request.args.get("n", 120))
+    tanque_id = request.args.get("tanque_id")  # esperado ALMACEN-CODIGO
+    n = int(request.args.get("n", 200))
     try:
         if not tanque_id or "-" not in tanque_id:
             return jsonify({"ok": True, "data": []})
         alm, cod = tanque_id.split("-", 1)
-        cal = rows_ci(load_table("FFCALA"))
+        cal = rows_upper(load_table("FFCALA"))
         out = []
         for r in cal:
             r_alm = str(r.get("ALMACEN") or "").strip()
             r_cod = str(r.get("CODIGO") or "").strip()
             if r_alm != alm or r_cod != cod:
                 continue
-            fecha = r.get("FECHA")
-            hora = r.get("HORA")
-            litros = _flt(r.get("LITROS"))
-            litros15 = _flt(r.get("LITROS15"))
-            temperatura = _flt(r.get("TEMPERA"))
             out.append({
                 "tanque_id": tanque_id,
-                "fecha": str(fecha) if fecha is not None else "",
-                "hora": str(hora) if hora is not None else "",
-                "litros": litros,
-                "litros15": litros15,
-                "temperatura": temperatura
+                "fecha": str(r.get("FECHA") or ""),
+                "hora": str(r.get("HORA") or ""),
+                "litros": _flt(r.get("LITROS")),
+                "litros15": _flt(r.get("LITROS15")),
+                "temperatura": _flt(r.get("TEMPERA"))
             })
         out = out[-n:] if n and len(out) > n else out
         return jsonify({"ok": True, "data": out})
@@ -226,7 +223,6 @@ def api_where():
     })
 
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", "5000"))
     print(f"Iniciando servidor en http://127.0.0.1:{port}")
     app.run(host="127.0.0.1", port=port, debug=True)
