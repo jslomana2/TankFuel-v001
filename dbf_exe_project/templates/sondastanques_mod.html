@@ -1,1 +1,167 @@
-<!doctype html><html lang='es'><head><meta charset='utf-8'><title>Tanques</title><link rel='stylesheet' href='sondastanques_mod.css'></head><body><div id='grid'></div><script src='sondastanques_mod.js'></script></body></html>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tanques – Vista avanzada (MODERNO interno)</title>
+
+  <!-- ✅ CORREGIDO: servir desde /static -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='sondastanques_mod.css') }}">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="h-inner">
+      <a class="brand" href="https://www.proconsi.com" target="_blank" rel="noopener">
+        <img src="https://cdn-ildmohp.nitrocdn.com/OlNFhHrAqkTDgXLhkVWXZfchjFGWnneH/assets/images/optimized/rev-7a6779b/proconsi.com/wp-content/uploads/Logotipo-completo-Proconsi-PNG-1.png"
+             alt="Proconsi"
+             onerror="this.style.display='none'; this.parentNode.insertAdjacentHTML('beforeend','<strong>PROCONSI</strong>')">
+      </a>
+      <div class="title">Tanques · Vista avanzada</div>
+      <div class="pill" id="summary">Cargando…</div>
+      <div class="spacer"></div>
+      <div class="ctrls">
+        <button id="alarmsBtn" title="Ir a alarmas">🔔 Alarmas</button>
+        <button id="refreshBtn" title="Refrescar">⟳ Refrescar</button>
+        <button id="prevBtn" title="Almacén anterior">←</button>
+        <select id="almacenSel"></select>
+        <button id="nextBtn" title="Almacén siguiente">→</button>
+      </div>
+    </div>
+    <div class="h-sub">
+      <label class="chk-all">
+        <input id="allToggle" type="checkbox">
+        <span>Ver todos los almacenes</span>
+      </label>
+    </div>
+  </header>
+
+  <div id="grid" class="grid"></div>
+  <div id="totales" aria-label="Totales por producto"></div>
+
+  <div id="histPanel" hidden>
+    <div id="histHeader">
+      <div id="histTitle" class="title">Histórico</div>
+      <div id="histInfo" class="pill">—</div>
+      <div id="histBtns">
+        <select id="groupSel" title="Agrupar para el gráfico">
+          <option value="hours">Horas</option>
+          <option value="days" selected>Días</option>
+        </select>
+        <button id="exportBtn" title="Exportar a Excel (CSV)">⬇ Excel</button>
+        <button id="pdfBtn" title="Exportar a PDF">⬇ PDF</button>
+      </div>
+    </div>
+
+    <div id="histFilters">
+      <label>Desde <input id="fromDate" type="date"></label>
+      <label>Hasta <input id="toDate" type="date"></label>
+      <button id="applyFilter">Aplicar</button>
+      <button id="quick7">Últimos 7 días</button>
+      <button id="quick30">Últimos 30 días</button>
+      <span id="rowsCount" class="pill">0 filas</span>
+    </div>
+
+    <canvas id="histChart"></canvas>
+    <table id="histTable" class="hist">
+      <thead>
+        <tr><th>Fecha</th><th>Medido (L)</th><th>Libro (L)</th><th>Dif. (L)</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <footer>
+    <div class="legend">
+      <span class="chip"><span class="dot" style="background:var(--ok)"></span> Normal</span>
+      <span class="chip"><span class="dot" style="background:var(--warn)"></span> Atención</span>
+      <span class="chip"><span class="dot" style="background:var(--bad)"></span> Alarma</span>
+      <span class="chip"><span class="dot" style="background:var(--water)"></span> Agua</span>
+    </div>
+    <div id="footerInfo"></div>
+  </footer>
+</div>
+
+<!-- ✅ CORREGIDO: servir desde /static -->
+<script src="{{ url_for('static', filename='sondastanques_mod.js') }}"></script>
+
+<!-- Hook para “Ver todos los almacenes” (no invasivo) -->
+<script>
+(function(){
+  var cb, lastRaw = null, setDataOrig = null;
+  function qs(id){ return document.getElementById(id); }
+  function setControlsEnabled(flag){
+    var sel = qs("almacenSel"), prev = qs("prevBtn"), next = qs("nextBtn");
+    if(sel) sel.disabled = !flag;
+    if(prev) prev.disabled = !flag;
+    if(next) next.disabled = !flag;
+  }
+  function flattenAll(raw){
+    try{
+      var tanks = [];
+      if(Array.isArray(raw)){
+        tanks = raw.slice();
+      }else if(raw && Array.isArray(raw.almacenes)){
+        raw.almacenes.forEach(function(a){
+          (a.tanques||[]).forEach(function(t){ tanks.push(t); });
+        });
+      }else{
+        return raw;
+      }
+      return tanks.map(function(t){
+        try{
+          var c = Object.assign({}, t);
+          c.almacen = "TODOS";
+          c.almacenNombre = "TODOS";
+          return c;
+        }catch(_){ return t; }
+      });
+    }catch(_){ return raw; }
+  }
+  function applyMode(){
+    if(!setDataOrig || lastRaw==null) return;
+    var all = !!(cb && cb.checked);
+    if(all){
+      setControlsEnabled(false);
+      setDataOrig(flattenAll(lastRaw));
+    }else{
+      setControlsEnabled(true);
+      setDataOrig(lastRaw);
+    }
+  }
+  function hookSetDataSoon(){
+    var tries = 0;
+    var iv = setInterval(function(){
+      tries++;
+      if(typeof window.setData === "function"){
+        if(!setDataOrig){
+          setDataOrig = window.setData;
+          window.setData = function(input){
+            lastRaw = input;
+            applyMode();
+          };
+        }
+        clearInterval(iv);
+      }else if(tries>50){
+        clearInterval(iv);
+      }
+    }, 100);
+  }
+  function init(){
+    cb = qs("allToggle");
+    hookSetDataSoon();
+    if(cb){
+      cb.checked = false;
+      cb.addEventListener("change", applyMode);
+    }
+  }
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", init);
+  }else{
+    init();
+  }
+})();
+</script>
+</body>
+</html>
