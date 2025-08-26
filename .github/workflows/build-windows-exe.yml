@@ -1,37 +1,28 @@
 name: Build Windows EXE
-
 on:
   workflow_dispatch:
-
+  push:
+    branches: [ main ]
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-
-      - name: Install deps
+          python-version: '3.12'
+      - name: Install dependencies
         run: |
-          cd dbf_exe_project
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller
-
-      - name: Build EXE
-        run: |
-          cd dbf_exe_project
-          pyinstaller --noconfirm --onefile ^
-            --name PROCONSI-Tanques ^
-            --add-data "templates;templates" ^
-            --add-data "static;static" ^
-            app.py
-          dir dist
-
+          pip install -r dbf_exe_project/requirements.txt
+          pip install pyinstaller
+      - name: Build EXE with PyInstaller
+        shell: pwsh
+        run: py -m PyInstaller -F -n PROCONSI-Tanques dbf_exe_project/app.py --add-data "dbf_exe_project/templates;templates" --add-data "dbf_exe_project/static;static"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PROCONSI-Tanques
-          path: dbf_exe_project/dist/PROCONSI-Tanques.exe
+          name: PROCONSI-Tanques-EXE
+          path: dist/PROCONSI-Tanques.exe
