@@ -24,7 +24,9 @@ jobs:
       - name: Build EXE
         working-directory: dbf_exe_project
         run: |
-          pyinstaller -F -n PROCONSI-Tanques app.py
+          pyinstaller -F -n PROCONSI-Tanques app.py ^
+            --add-data "templates;templates" ^
+            --add-data "static;static"
 
       - name: Upload artifact (EXE)
         uses: actions/upload-artifact@v4
