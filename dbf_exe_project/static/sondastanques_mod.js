@@ -69,7 +69,7 @@ async function loadTanques() {
 
     const label = document.createElement("div");
     label.className = "label";
-    label.innerHTML = `<span>Nivel: <strong>${fmt(t.litros)}</strong> L</span>
+    label.innerHTML = `<span>Nivel: <strong>${fmt(t.litros)}</strong> L${t.litros15? ` · 15º: <strong>${fmt(t.litros15)}</strong> L` : ""}</span>
                        <span><strong>${t.porcentaje ? t.porcentaje.toFixed(1) : "–" }%</strong></span>`;
     div.appendChild(label);
 
