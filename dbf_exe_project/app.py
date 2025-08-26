@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, date
 from typing import Dict, Any, List, Optional
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, Response
 
 try:
     from dbfread import DBF
@@ -35,7 +35,7 @@ def _to_datetime(rec: Dict[str, Any], fields: List[str]) -> Optional[datetime]:
             fecha = rec[f_fecha]
             hora_val = rec[f_hora]
             if hasattr(fecha, "year"):
-                year, month, day = fecha.year, fecha.month, fecha.day
+                y, m, d = fecha.year, fecha.month, fecha.day
             else:
                 return None
             if isinstance(hora_val, (int, float)):
@@ -50,7 +50,7 @@ def _to_datetime(rec: Dict[str, Any], fields: List[str]) -> Optional[datetime]:
                 else:
                     s = s.zfill(6)
                     hh, mm, ss = int(s[0:2]), int(s[2:4]), int(s[4:6])
-            return datetime(year, month, day, hh, mm, ss)
+            return datetime(y, m, d, hh, mm, ss)
         elif f_fecha and rec.get(f_fecha):
             fecha = rec[f_fecha]
             if isinstance(fecha, datetime):
@@ -74,13 +74,6 @@ def _read_dbf(path: str) -> List[Dict[str, Any]]:
     table = DBF(path, ignore_missing_memofile=True, recfactory=dict, char_decode_errors='ignore')
     return list(table)
 
-def _last_non_null(values: List[Any]) -> Optional[Any]:
-    for v in values:
-        if v is None: continue
-        if isinstance(v, str) and v.strip() == "": continue
-        return v
-    return None
-
 def _normalize_float(v) -> Optional[float]:
     try:
         if v is None: return None
@@ -91,21 +84,41 @@ def _normalize_float(v) -> Optional[float]:
     except Exception:
         return None
 
+def _last_non_null(values: List[Any]) -> Optional[Any]:
+    for v in values:
+        if v is None: continue
+        if isinstance(v, str) and v.strip() == "": continue
+        return v
+    return None
+
+def _san(v):
+    from datetime import date, datetime
+    if isinstance(v, (int, float, bool)) or v is None:
+        return v
+    if isinstance(v, (datetime, date)):
+        return v.isoformat()
+    if isinstance(v, bytes):
+        try:
+            return v.decode('latin-1')
+        except Exception:
+            return v.decode('utf-8', errors='ignore')
+    return str(v)
+
+def _san_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [{k: _san(v) for k, v in r.items()} for r in rows]
+
 def load_maestros(base_dir: str):
-    fftanq_path = os.path.join(base_dir, "FFTANQ.DBF")
-    ffalma_path = os.path.join(base_dir, "FFALMA.DBF")
-    ffarti_path = os.path.join(base_dir, "FFARTI.DBF")
     maestros = {"tanques": [], "almacenes": [], "articulos": []}
     try:
-        maestros["tanques"] = _read_dbf(fftanq_path)
+        maestros["tanques"] = _read_dbf(os.path.join(base_dir, "FFTANQ.DBF"))
     except Exception as e:
         log.warning(f"No se pudo leer FFTANQ: {e}")
     try:
-        maestros["almacenes"] = _read_dbf(ffalma_path)
+        maestros["almacenes"] = _read_dbf(os.path.join(base_dir, "FFALMA.DBF"))
     except Exception as e:
         log.warning(f"No se pudo leer FFALMA: {e}")
     try:
-        maestros["articulos"] = _read_dbf(ffarti_path)
+        maestros["articulos"] = _read_dbf(os.path.join(base_dir, "FFARTI.DBF"))
     except Exception as e:
         log.warning(f"No se pudo leer FFARTI: {e}")
     return maestros
@@ -129,7 +142,6 @@ def load_tanques_norm(base_dir: str, almacen_filter: Optional[str]=None) -> List
     idx_alma = index_by_key(maestros["almacenes"], f_idalma) if maestros["almacenes"] else {}
     idx_arti = index_by_key(maestros["articulos"], f_idarti) if maestros["articulos"] else {}
 
-    # Lecturas
     ffcala_path = os.path.join(base_dir, "FFCALA.DBF")
     try:
         calibras = _read_dbf(ffcala_path)
@@ -181,17 +193,6 @@ def load_tanques_norm(base_dir: str, almacen_filter: Optional[str]=None) -> List
         if volumen is None or litros15 is None or temperatura is None:
             continue
 
-        desc_alma = None
-        if alma in idx_alma:
-            f_desc_a = _find_field(list(idx_alma[alma].keys()), "NOMBRE", "DESCR", "DESCRIPCION", "NOMALMA")
-            desc_alma = idx_alma[alma].get(f_desc_a) if f_desc_a else None
-
-        arti = t.get(f_idarti) if f_idarti else None
-        desc_prod = None
-        if arti in idx_arti:
-            f_desc_p = _find_field(list(idx_arti[arti].keys()), "NOMBRE", "DESCR", "DESCRIPCION", "DESCPROD", "DESARTI")
-            desc_prod = idx_arti[arti].get(f_desc_p) if f_desc_p else None
-
         f_cap = _find_field(list(t.keys()), "CAPACIDAD", "MAX", "MAXIMO", "CAPA")
         capacidad = None
         try:
@@ -200,12 +201,15 @@ def load_tanques_norm(base_dir: str, almacen_filter: Optional[str]=None) -> List
         except Exception:
             capacidad = None
 
+        # Descripciones (sanitizadas)
+        desc_alma = None
+        arti = t.get(f_idarti) if f_idarti else None
         salida.append({
-            "almacen_id": alma,
-            "almacen_desc": desc_alma,
-            "tanque_id": tanq,
-            "producto_id": arti,
-            "producto_desc": desc_prod,
+            "almacen_id": str(alma) if alma is not None else None,
+            "almacen_desc": None,
+            "tanque_id": str(tanq) if tanq is not None else None,
+            "producto_id": str(arti) if arti is not None else None,
+            "producto_desc": None,
             "volumen": volumen,
             "litros15": litros15,
             "temperatura": temperatura,
@@ -217,6 +221,10 @@ def load_tanques_norm(base_dir: str, almacen_filter: Optional[str]=None) -> List
 @app.route("/")
 def home():
     return render_template("sondastanques_mod.html")
+
+@app.route("/favicon.ico")
+def favicon():
+    return Response(status=204)
 
 @app.route("/api/tanques_norm")
 def api_tanques_norm():
@@ -233,13 +241,42 @@ def api_tanques_norm():
 def api_almacenes():
     base_dir = os.getcwd()
     maestros = load_maestros(base_dir)
-    return jsonify({"ok": True, "count": len(maestros.get('almacenes', [])), "almacenes": maestros.get('almacenes', [])})
+    rows = maestros.get("almacenes", [])
+    # Sanitize
+    def san(v):
+        from datetime import date, datetime
+        if isinstance(v, (int, float, bool)) or v is None:
+            return v
+        if isinstance(v, (datetime, date)):
+            return v.isoformat()
+        if isinstance(v, bytes):
+            try:
+                return v.decode('latin-1')
+            except Exception:
+                return v.decode('utf-8', errors='ignore')
+        return str(v)
+    rows = [{k: san(v) for k, v in r.items()} for r in rows]
+    return jsonify({"ok": True, "count": len(rows), "almacenes": rows})
 
 @app.route("/api/articulos")
 def api_articulos():
     base_dir = os.getcwd()
     maestros = load_maestros(base_dir)
-    return jsonify({"ok": True, "count": len(maestros.get('articulos', [])), "articulos": maestros.get('articulos', [])})
+    rows = maestros.get("articulos", [])
+    def san(v):
+        from datetime import date, datetime
+        if isinstance(v, (int, float, bool)) or v is None:
+            return v
+        if isinstance(v, (datetime, date)):
+            return v.isoformat()
+        if isinstance(v, bytes):
+            try:
+                return v.decode('latin-1')
+            except Exception:
+                return v.decode('utf-8', errors='ignore')
+        return str(v)
+    rows = [{k: san(v) for k, v in r.items()} for r in rows]
+    return jsonify({"ok": True, "count": len(rows), "articulos": rows})
 
 @app.route("/api/where")
 def api_where():
