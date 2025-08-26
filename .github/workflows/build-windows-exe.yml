@@ -1,3 +1,4 @@
+
 name: Build Windows EXE
 
 on:
@@ -6,37 +7,44 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+
     env:
       proyecto_dir: dbf_exe_project
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Show tree
+
+      - name: Mostrar estructura (debug)
         run: |
-          echo %CD%
+          echo Workspace: %CD%
           dir /b
           echo ----
           dir %proyecto_dir% /b
         shell: cmd
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install deps
+
+      - name: Instalar dependencias
         run: |
           cd %proyecto_dir%
           py -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
         shell: cmd
-      - name: Build EXE
+
+      - name: Compilar EXE (incluye templates/static)
         run: |
           cd %proyecto_dir%
           pyinstaller -F -n PROCONSI-Tanques app.py ^
             --add-data "templates;templates" ^
             --add-data "static;static"
         shell: cmd
-      - name: Upload artifact
+
+      - name: Subir artefacto
         uses: actions/upload-artifact@v4
         with:
           name: PROCONSI-Tanques_EXE
