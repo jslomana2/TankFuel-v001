@@ -21,12 +21,12 @@ jobs:
           pip install -r dbf_exe_project/requirements.txt
           pip install pyinstaller
 
-      - name: Build EXE
+      - name: Build EXE (bundle templates/static)
         working-directory: dbf_exe_project
-        run: |
-          pyinstaller -F -n PROCONSI-Tanques app.py ^
-            --add-data "templates;templates" ^
-            --add-data "static;static"
+        run: >
+          pyinstaller -F -n PROCONSI-Tanques app.py
+          --add-data "templates;templates"
+          --add-data "static;static"
 
       - name: Upload artifact (EXE)
         uses: actions/upload-artifact@v4
