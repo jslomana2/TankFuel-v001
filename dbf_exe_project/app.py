@@ -38,21 +38,15 @@ def load_table(name):
     return list(DBF(str(path), encoding="latin1", ignore_missing_memofile=True))
 
 def rows_upper(rows):
-    return [{k.upper(): v for k, v in r.items()} for r in rows]
+    return [{k.upper(): v for k,v in r.items()} for r in rows]
 
 def _flt(x):
     try:
-        if x is None or (isinstance(x, str) and x.strip() == ""):
+        if x is None or (isinstance(x,str) and x.strip()==""):
             return None
         return float(x)
     except Exception:
         return None
-
-def _last_non_null(vals):
-    for v in reversed(vals):
-        if v is not None:
-            return v
-    return None
 
 def color_dec_to_hex_bgr(v, default="#4f8cc9"):
     try:
@@ -65,12 +59,11 @@ def color_dec_to_hex_bgr(v, default="#4f8cc9"):
         return default
 
 @app.route("/")
-def home():
-    # Vista completa con tu diseño
+def index():
+    # vista completa (tu HTML)
     try:
         return render_template("sondastanques_mod.html", app_name=APP_NAME)
     except Exception:
-        # Fallback si la plantilla no estuviese
         return render_template("sondastanques_compat.html", app_name=APP_NAME)
 
 @app.route("/compat")
@@ -81,17 +74,20 @@ def compat():
 def api_almacenes():
     try:
         tanqs = rows_upper(load_table("FFTANQ"))
-        present = sorted({str((r.get("ALMACEN") or r.get("CODALM") or r.get("CODIGO") or "")).strip() for r in tanqs if (r.get("ALMACEN") or r.get("CODALM") or r.get("CODIGO"))})
+        present = sorted({ str((r.get("ALMACEN") or r.get("CODALM") or r.get("CODIGO") or "")).strip()
+                           for r in tanqs if (r.get("ALMACEN") or r.get("CODALM") or r.get("CODIGO")) })
         name_by_code = {}
         try:
             alms = rows_upper(load_table("FFALMA"))
             for r in alms:
                 c = str(r.get("CODIGO") or "").strip()
                 n = str(r.get("POBLACION") or r.get("NOMBRE") or c).strip()
-                if c: name_by_code[c] = n
+                if c:
+                    name_by_code[c] = n
         except Exception:
             pass
-        return jsonify({"ok": True, "data": [{"codigo": c, "nombre": name_by_code.get(c, c)} for c in present]})
+        data = [{"codigo": c, "nombre": name_by_code.get(c, c)} for c in present]
+        return jsonify({"ok": True, "data": data})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -101,7 +97,8 @@ def api_tanques_norm():
     n = int(request.args.get("n", 5))
     try:
         tanqs = rows_upper(load_table("FFTANQ"))
-        # artículos
+
+        # Artículos y colores
         try:
             arts = rows_upper(load_table("FFARTI"))
         except Exception:
@@ -110,64 +107,80 @@ def api_tanques_norm():
         for a in arts:
             cod = str(a.get("CODIGO") or "").strip()
             alm = str(a.get("ALMACEN") or "").strip()
-            name = (a.get("DESCRI") or a.get("DESCRIPCION") or cod)
             color = color_dec_to_hex_bgr(a.get("COLORPRODU"))
+            name = (a.get("DESCRI") or a.get("DESCRIPCION") or cod)
             if cod:
                 idx_by_code[cod] = {"producto": str(name).strip(), "color": color}
             if alm and cod:
-                idx_by_pair[(alm, cod)] = {"producto": str(name).strip(), "color": color}
-        # nombres almacen
+                idx_by_pair[(alm,cod)] = {"producto": str(name).strip(), "color": color}
+
         name_by_code = {}
         try:
             alms = rows_upper(load_table("FFALMA"))
             for r in alms:
                 c = str(r.get("CODIGO") or "").strip()
                 n = str(r.get("POBLACION") or r.get("NOMBRE") or c).strip()
-                if c: name_by_code[c] = n
+                if c:
+                    name_by_code[c] = n
         except Exception:
             pass
-        # últimas N lecturas por tanque
-        last = {}
+
+        # Últimas n lecturas FFCALA por tanque
+        last_by_tank = {}
         try:
             cal = rows_upper(load_table("FFCALA"))
             buckets = defaultdict(lambda: {"litros": deque(maxlen=n), "litros15": deque(maxlen=n), "temp": deque(maxlen=n)})
             for r in cal:
                 alm = str(r.get("ALMACEN") or "").strip()
                 cod = str(r.get("CODIGO") or "").strip()
-                if not alm or not cod: continue
-                if almacen_filter and alm != almacen_filter: continue
+                if not alm or not cod:
+                    continue
+                if almacen_filter and alm != almacen_filter:
+                    continue
                 key = f"{alm}-{cod}"
                 b = buckets[key]
                 b["litros"].append(_flt(r.get("LITROS")))
                 b["litros15"].append(_flt(r.get("LITROS15")))
                 b["temp"].append(_flt(r.get("TEMPERA")))
-            last = buckets
+            last_by_tank = buckets
         except Exception:
-            last = {}
+            pass
+
+        def last_non_null(dq):
+            for v in reversed(dq):
+                if v is not None:
+                    return v
+            return None
 
         data = []
         for r in tanqs:
             alm = str((r.get("ALMACEN") or r.get("CODALM") or r.get("CODIGO") or "")).strip()
             codtan = str((r.get("CODIGO") or r.get("IDTANQ") or r.get("CODTAN") or "")).strip()
-            if not alm or not codtan: continue
-            if almacen_filter and alm != almacen_filter: continue
+            if not alm or not codtan:
+                continue
+            if almacen_filter and alm != almacen_filter:
+                continue
             art = str((r.get("ARTICULO") or "")).strip()
             artinfo = idx_by_pair.get((alm, art)) or idx_by_code.get(art) or {"producto": art, "color": "#4f8cc9"}
+
             capacidad = _flt(r.get("CAPACIDAD"))
             key = f"{alm}-{codtan}"
-            if key in last:
-                litros = _last_non_null(list(last[key]["litros"])) or _flt(r.get("STOCK"))
-                litros15 = _last_non_null(list(last[key]["litros15"])) or _flt(r.get("STOCK15"))
-                temperatura = _last_non_null(list(last[key]["temp"]))
+            if key in last_by_tank:
+                litros = last_non_null(last_by_tank[key]["litros"]) or _flt(r.get("STOCK"))
+                litros15 = last_non_null(last_by_tank[key]["litros15"]) or _flt(r.get("STOCK15"))
+                temperatura = last_non_null(last_by_tank[key]["temp"])
             else:
                 litros = _flt(r.get("STOCK"))
                 litros15 = _flt(r.get("STOCK15"))
                 temperatura = None
+
             porcentaje = None
             if capacidad and litros is not None:
-                try: porcentaje = max(0.0, min(100.0, (litros / capacidad) * 100.0))
-                except Exception: porcentaje=None
-            disponible = (capacidad - litros) if (capacidad is not None and litros is not None) else None
+                try:
+                    porcentaje = max(0.0, min(100.0, (litros / capacidad) * 100.0))
+                except Exception:
+                    porcentaje = None
+
             data.append({
                 "tanque_id": key,
                 "almacen": alm,
@@ -179,8 +192,7 @@ def api_tanques_norm():
                 "volumen": litros,
                 "litros15": litros15,
                 "temperatura": temperatura,
-                "porcentaje": porcentaje,
-                "disponible": disponible
+                "porcentaje": porcentaje
             })
         return jsonify({"ok": True, "data": data})
     except Exception as e:
@@ -193,20 +205,23 @@ def api_calibraciones():
     try:
         if not tanque_id or "-" not in tanque_id:
             return jsonify({"ok": True, "data": []})
-        alm, cod = tanque_id.split("-", 1)
+        alm, cod = tanque_id.split("-",1)
         cal = rows_upper(load_table("FFCALA"))
-        rows = [r for r in cal if str(r.get("ALMACEN") or "").strip()==alm and str(r.get("CODIGO") or "").strip()==cod]
-        rows = rows[-n:] if len(rows)>n else rows
-        out = []
-        for r in rows:
-            out.append({
+        rows = []
+        for r in cal:
+            r_alm = str(r.get("ALMACEN") or "").strip()
+            r_cod = str(r.get("CODIGO") or "").strip()
+            if r_alm != alm or r_cod != cod:
+                continue
+            rows.append({
                 "fecha": str(r.get("FECHA") or ""),
                 "hora": str(r.get("HORA") or ""),
                 "litros": _flt(r.get("LITROS")),
                 "litros15": _flt(r.get("LITROS15")),
                 "temperatura": _flt(r.get("TEMPERA"))
             })
-        return jsonify({"ok": True, "data": out})
+        rows = rows[-n:] if n and len(rows) > n else rows
+        return jsonify({"ok": True, "data": rows})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
