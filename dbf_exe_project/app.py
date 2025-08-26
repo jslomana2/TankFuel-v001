@@ -1,143 +1,150 @@
 import os
-import logging
-from flask import Flask, jsonify, render_template, send_from_directory, request
-from dbfread import DBF
+from flask import Flask, jsonify, render_template, request
 from datetime import datetime
+from dbfread import DBF
 
-logging.basicConfig(level=logging.INFO,
-                    format="%(asctime)s [%(levelname)s] %(message)s")
+app = Flask(__name__, template_folder="templates", static_folder="static")
 
-app = Flask(__name__)
+def to_float(v):
+    try:
+        if v in (None, ""): return None
+        return float(v)
+    except Exception:
+        return None
 
-# === Config ===
-# Donde están los DBF: por defecto, misma carpeta que el EXE/APP.
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
-DBF_DIR = os.environ.get("DBF_DIR", APP_DIR)
-
-# Nombres ficheros
-FFALMA = os.environ.get("FFALMA", "FFALMA.DBF")
-FFARTI = os.environ.get("FFARTI", "FFARTI.DBF")
-FFTANQ = os.environ.get("FFTANQ", "FFTANQ.DBF")
-FFCALA = os.environ.get("FFCALA", "FFCALA.DBF")
+def to_str(v):
+    return "" if v is None else str(v).strip()
 
 def dbf_path(name):
-    return os.path.join(DBF_DIR, name)
+    here = os.path.abspath(os.path.dirname(__file__))
+    return os.path.join(here, f"{name}.DBF")
 
-def safe_json_val(v):
-    # Normaliza valores DBF a JSON friendly
-    if v is None:
-        return ""
-    if isinstance(v, bytes):
-        try:
-            return v.decode('utf-8', errors='ignore')
-        except Exception:
-            return ""
-    if isinstance(v, (datetime,)):
-        return v.isoformat()
-    return v
-
-def load_dbf(name, lower_keys=False):
-    path = dbf_path(name)
-    if not os.path.exists(path):
-        logging.warning("DBF no encontrado: %s", path)
-        return []
-    try:
-        rows = []
-        for rec in DBF(path, char_decode_errors='ignore'):
-            d = dict(rec)
-            if lower_keys:
-                d = { (k.lower() if isinstance(k, str) else k): safe_json_val(v) for k, v in d.items() }
-            else:
-                d = { k: safe_json_val(v) for k, v in d.items() }
-            rows.append(d)
-        return rows
-    except Exception as e:
-        logging.exception("Error leyendo %s: %s", path, e)
-        return []
+def safe_dbf(name):
+    p = dbf_path(name)
+    if os.path.exists(p):
+        return DBF(p, ignore_missing_memofile=True, encoding="latin-1")
+    return None
 
 @app.route("/")
-def home():
+def index():
     return render_template("sondastanques_mod.html")
 
-@app.route("/favicon.ico")
-def favicon():
-    # Placeholder
-    return "", 404
-
-@app.route("/api/almacenes")
+@app.get("/api/almacenes")
 def api_almacenes():
-    rows = load_dbf(FFALMA)
-    return jsonify({"count": len(rows), "rows": rows})
+    t = safe_dbf("FFALMA")
+    out = []
+    if t:
+        for r in t:
+            out.append({
+                "id": to_str(r.get("ALMACEN")),
+                "nombre": to_str(r.get("NOMBRE") or r.get("DESCRI") or r.get("DESCRIPCION") or "--"),
+            })
+    return jsonify(out)
 
-@app.route("/api/articulos")
+@app.get("/api/articulos")
 def api_articulos():
-    rows = load_dbf(FFARTI)
-    return jsonify({"count": len(rows), "rows": rows})
+    t = safe_dbf("FFARTI")
+    out = []
+    if t:
+        for r in t:
+            out.append({
+                "articulo": to_str(r.get("ARTICULO") or r.get("CODIGO")),
+                "descripcion": to_str(r.get("DESCRI") or r.get("DESCRIPCION") or "--"),
+                "color": r.get("COLORPRODU") or r.get("COLOR") or None,
+                "colorRGB": r.get("COLORRGB") or None,
+            })
+    return jsonify(out)
 
-@app.route("/api/tanques_norm")
+@app.get("/api/tanques_norm")
 def api_tanques_norm():
-    # Unimos FFTANQ con FFARTI (por ALMACEN+CODIGO/ARTICULO) para traer COLORPRODU
-    tanques = load_dbf(FFTANQ, lower_keys=True)
-    articulos = load_dbf(FFARTI, lower_keys=True)
-    arts_index = {}
-    for a in articulos:
-        key = f"{a.get('almacen','')}-{a.get('codigo','')}"
-        arts_index[key] = a
+    almacen = request.args.get("almacen")
+    t_tq = safe_dbf("FFTANQ")
+    t_ar = safe_dbf("FFARTI")
+
+    art_map = {}
+    if t_ar:
+        for a in t_ar:
+            key = to_str(a.get("ARTICULO") or a.get("CODIGO"))
+            art_map[key] = {
+                "producto": to_str(a.get("DESCRI") or a.get("DESCRIPCION") or "--"),
+                "color": a.get("COLORPRODU") or a.get("COLOR") or None,
+                "colorRGB": a.get("COLORRGB") or None,
+            }
 
     out = []
-    for t in tanques:
-        # campos esperados en FFTANQ
-        almacen_id = str(t.get("almacen","")).zfill(4) if t.get("almacen") else ""
-        producto_id = str(t.get("articulo","")).zfill(4) if t.get("articulo") else ""
-        key = f"{almacen_id}-{producto_id}"
-        art = arts_index.get(key, {})
+    if t_tq:
+        for r in t_tq:
+            alm = to_str(r.get("ALMACEN"))
+            if almacen and alm.upper() != almacen.upper():
+                continue
+            nombre = to_str(r.get("NOMBRE") or r.get("CODIGO") or "TANQUE")
+            articulo = to_str(r.get("ARTICULO"))
+            cap = to_float(r.get("CAPACIDAD")) or 0.0
+            stock = to_float(r.get("STOCK15") or r.get("STOCK") or 0.0) or 0.0
+            agua = to_float(r.get("AGUA") or r.get("ALTAGUA") or 0.0) or 0.0
+            temp = to_float(r.get("TEMP") or r.get("TEMPERATURA"))
+            prod = art_map.get(articulo, {})
 
-        colorprodu = art.get("colorprodu", "") or art.get("colorprodu".upper(), "")
-        try:
-            # puede venir como float -> int
-            colorprodu = int(float(colorprodu)) if colorprodu not in ("", None) else None
-        except Exception:
-            colorprodu = None
+            out.append({
+                "almacen": alm,
+                "nombre": nombre,
+                "producto": prod.get("producto", "--"),
+                "color": prod.get("color"),
+                "colorRGB": prod.get("colorRGB"),
+                "capacidad": cap,
+                "volumen": stock,
+                "alturaAgua": agua,
+                "temperatura": temp,
+                "status": "ok",
+                "spark": [],
+            })
+    return jsonify(out)
 
-        out.append({
-            "almacen_id": almacen_id,
-            "almacen_nombre": t.get("almacen_nom", "") or "",
-            "capacidad_l": t.get("capacidad", 0) or 0,
-            "descripcion": t.get("descri", "") or t.get("descripcion","") or "",
-            "producto_id": producto_id,
-            "producto_nombre": art.get("descri", "") or art.get("descripvp1","") or "",
-            "stock15_l": t.get("stock15", 0) or 0,
-            "stock_l": t.get("stock", 0) or 0,
-            "tanque_codigo": t.get("tanque", "") or t.get("codigo","") or "",
-            "tanque_id": f"{almacen_id}-{t.get('tanque','') or t.get('codigo','')}",
-            "temp_ultima_c": t.get("tempera", "") or t.get("tempult", "") or "",
-            "color_produ": colorprodu,
-        })
-    return jsonify({"count": len(out), "rows": out})
-
-@app.route("/api/calibraciones/ultimas")
+@app.get("/api/calibraciones/ultimas")
 def api_calibraciones_ultimas():
     tanque_id = request.args.get("tanque_id", "")
-    n = int(request.args.get("n", 10))
-    rows = load_dbf(FFCALA, lower_keys=True)
-    # si tanque_id = "0001-0003" -> almacen 0001, tanque 0003
-    almacen = ""
-    tanque = ""
-    if "-" in tanque_id:
-        almacen, tanque = tanque_id.split("-", 1)
-    else:
-        tanque = tanque_id
-    # Filtrado sencillo
-    filt = [r for r in rows if (not almacen or str(r.get("almacen","")).zfill(4)==almacen) and (not tanque or str(r.get("tanque","")).zfill(4)==tanque)]
-    # ordenar por FECHAMOD descendente si existe
-    try:
-        filt.sort(key=lambda r: r.get("fechamod","") or "", reverse=True)
-    except Exception:
-        pass
-    return jsonify({"count": len(filt[:n]), "file": dbf_path(FFCALA), "rows": filt[:n]})
+    n = int(request.args.get("n", 50))
+    t = safe_dbf("FFCALA")
+    rows = []
+    if t:
+        tmp = []
+        for r in t:
+            alm = to_str(r.get("ALMACEN"))
+            tq = to_str(r.get("TANQUE") or r.get("NOMBRE"))
+            key = f"{alm}|{tq}"
+            if tanque_id and key.upper() != tanque_id.upper():
+                continue
+
+            fecha = r.get("FECHA") or r.get("FECLECT") or None
+            if isinstance(fecha, datetime):
+                fecha_txt = fecha.strftime("%Y-%m-%d %H:%M")
+            else:
+                fecha_txt = to_str(fecha)
+
+            tmp.append({
+                "fecha": fecha_txt,
+                "medido": to_float(r.get("MEDIDO")) or 0.0,
+                "libro": to_float(r.get("LIBRO") or r.get("STOCK")) or 0.0,
+                "almacen": alm,
+                "tanque": tq,
+            })
+        tmp.sort(key=lambda x: x["fecha"])
+        rows = tmp[-n:]
+    return jsonify(rows)
+
+@app.get("/api/where")
+def api_where():
+    table = (request.args.get("table") or "FFTANQ").upper()
+    field = request.args.get("field") or ""
+    value = request.args.get("value") or ""
+    t = safe_dbf(table)
+    out = []
+    if t and field:
+        for r in t:
+            if to_str(r.get(field)).upper() == to_str(value).upper():
+                out.append({k: ("" if v is None else v) for k, v in r.items()})
+    return jsonify(out)
 
 if __name__ == "__main__":
-    host = "127.0.0.1"
-    port = int(os.environ.get("PORT", 5000))
-    logging.info("Iniciando servidor en http://%s:%s", host, port)
-    app.run(host=host, port=port, debug=True)
+    port = int(os.environ.get("PORT", "5000"))
+    app.run(host="127.0.0.1", port=port, debug=True)
