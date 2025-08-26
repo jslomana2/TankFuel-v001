@@ -79,7 +79,7 @@ def api_almacenes():
             alms = rows_upper(load_table("FFALMA"))
             for r in alms:
                 c = str(r.get("CODIGO") or "").strip()
-                n = str(r.get("NOMBRE") or c).strip()
+                n = str((r.get("POBLACION") or r.get("NOMBRE") or c)).strip()
                 if c:
                     name_by_code[c] = n
         except Exception:
@@ -137,7 +137,7 @@ def api_tanques_norm():
             alms = rows_upper(load_table("FFALMA"))
             for r in alms:
                 c = str(r.get("CODIGO") or "").strip()
-                n = str(r.get("NOMBRE") or c).strip()
+                n = str((r.get("POBLACION") or r.get("NOMBRE") or c)).strip()
                 if c:
                     name_by_code[c] = n
         except Exception:

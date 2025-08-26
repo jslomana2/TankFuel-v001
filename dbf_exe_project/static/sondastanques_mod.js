@@ -63,7 +63,7 @@ async function loadTanques() {
     meta.className = "meta";
     meta.innerHTML = `<span>Almacén: <strong>${fmt(t.almacen)}</strong></span>
                       <span>Cap: <strong>${fmt(t.capacidad)}</strong> L</span>
-                      <span>Agua: <strong>${fmt(t.agua)}</strong> L</span>
+                      <span></span>
                       <span>Temp: <strong>${fmt(t.temperatura)}</strong> ºC</span>`;
     div.appendChild(meta);
 
