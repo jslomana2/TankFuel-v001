@@ -152,9 +152,9 @@ def load_tanques_norm(base_dir: str, almacen_filter: Optional[str]=None, want_de
     f_fields = list(calibras[0].keys()) if calibras else []
     c_idtanq = _find_field(f_fields, "IDTANQ", "CODTANQ", "TANQUE", "ID_TANQ", "IDTANQUE")
     c_idalma = _find_field(f_fields, "IDALMA", "CODALMA", "ALMACEN", "ID_ALMA")
-    c_litros = _find_field(f_fields, "LITROS", "VOL", "VOLUMEN")
-    c_l15    = _find_field(f_fields, "LITROS15", "VOL15", "VOLUMEN15")
-    c_temp   = _find_field(f_fields, "TEMPERA", "TEMP", "TEMPERATURA")
+    c_litros = _find_field(f_fields, "LITROS", "VOL", "VOLUMEN", "LTS", "VOLUMEN_ACTUAL", "LECTURA_LTS")
+    c_l15    = _find_field(f_fields, "LITROS15", "VOL15", "VOLUMEN15", "LTS15", "L15", "VOL_15")
+    c_temp   = _find_field(f_fields, "TEMPERA", "TEMP", "TEMPERATURA", "TEMP_TQ", "TANQ_TEMP", "T")
 
     grouped = {}
     for rec in calibras:
@@ -292,3 +292,28 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5000"))
     log.info(f"Iniciando servidor en http://127.0.0.1:{port}")
     app.run(host="127.0.0.1", port=port, debug=True)
+
+
+@app.route("/api/ffcala/campos")
+def api_ffcala_campos():
+    base_dir = os.getcwd()
+    try:
+        rows = _read_dbf(os.path.join(base_dir, "FFCALA.DBF"))
+        fields = list(rows[0].keys()) if rows else []
+        # sample first 3 records for inspection (sanitized)
+        def _san(v):
+            from datetime import date, datetime
+            if isinstance(v, (int, float, bool)) or v is None:
+                return v
+            if isinstance(v, (datetime, date)):
+                return v.isoformat()
+            if isinstance(v, bytes):
+                try:
+                    return v.decode('latin-1')
+                except Exception:
+                    return v.decode('utf-8', errors='ignore')
+            return str(v)
+        sample = [{k:_san(r.get(k)) for k in r.keys()} for r in rows[:3]]
+        return jsonify({"ok": True, "fields": fields, "sample": sample, "count": len(rows)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
