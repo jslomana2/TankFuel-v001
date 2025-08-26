@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Sondas · Compat</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='sondastanques_mod.css') }}">
+  <style>
+    /* Compat: sin header, sin leyendas; fondo transparente opcional */
+    body { background: transparent; }
+    header, #legend { display: none !important; }
+    main { grid-template-columns: 1fr !important; padding: 8px !important; }
+    .card { margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <main>
+    <section id="grid" aria-live="polite">Cargando…</section>
+    <section id="sidepanel" class="hidden">
+      <div id="sideheader">
+        <strong id="sp_title">–</strong>
+        <button id="sp_close" title="Cerrar">×</button>
+      </div>
+      <div id="spark_container">
+        <svg id="spark" viewBox="0 0 400 120" preserveAspectRatio="none"></svg>
+      </div>
+      <div id="sp_meta"></div>
+    </section>
+  </main>
+  <script>
+    // Forzar el primer almacén al cargar para compat
+    const API = {
+      tanques: (alm=null) => '/api/tanques_norm' + (alm? ('?almacen=' + encodeURIComponent(alm)) : ''),
+      almacenes: '/api/almacenes',
+      calibraciones: (id, n=120) => '/api/calibraciones/ultimas?tanque_id=' + encodeURIComponent(id) + '&n=' + n
+    };
+    window.__COMPAT__ = true;
+  </script>
+  <script src="{{ url_for('static', filename='sondastanques_mod.js') }}"></script>
+  <script>
+    // Auto-cargar el primer almacén en modo compat
+    (async () => {
+      try {
+        const r = await fetch(API.almacenes);
+        const j = await r.json();
+        if (j.ok && j.data.length) {
+          const alm = j.data[0].codigo;
+          const rr = await fetch(API.tanques(alm));
+          const jj = await rr.json();
+          // El JS existente se encarga de pintar si encuentra #grid y API.*
+          // Si necesita un trigger, exponer los datos globalmente:
+          window.__INIT_DATA__ = jj;
+        }
+      } catch (e) { console.error(e); }
+    })();
+  </script>
+</body>
+</html>
