@@ -1,0 +1,41 @@
+
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Compat Tanques</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='sondastanques_mod.css') }}">
+  <style>
+    body{background:#0b1220;margin:0;padding:10px}
+  </style>
+</head>
+<body>
+  <div id="grid"></div>
+  <script>
+  (async()=>{
+    const grid=document.getElementById('grid');
+    const msg=(t)=>grid.innerHTML='<div style="color:#9bb0c8;padding:12px">'+t+'</div>';
+    try{
+      let alm=null;
+      const ra=await fetch('/api/almacenes'); const ja=await ra.json();
+      if(ja.ok && ja.data && ja.data.length){ alm=ja.data[0].codigo; }
+      const url= alm ? ('/api/tanques_norm?almacen='+encodeURIComponent(alm)+'&n=5') : '/api/tanques_norm?n=5';
+      const rt=await fetch(url); const jt=await rt.json();
+      if(!jt.ok){ msg('Error: '+(jt.error||'sin datos')); return; }
+      if(!jt.data || !jt.data.length){ msg('Sin tanques.'); return; }
+      grid.innerHTML = jt.data.map(t=>`
+      <div class="card compat" style="width:360px;display:inline-block;margin:8px">
+        <div class="card-h">
+          <div class="card-title">${t.nombre||('Tanque '+t.tanque_id)}</div>
+          <span class="chip" style="border-color:#1f2d44;background:${t.color||'#4f8cc9'}22">${t.producto||''}</span>
+        </div>
+        <div class="kv">Alm: ${t.almacen} · Cap: ${t.capacidad||'-'} L · Temp: ${t.temperatura==null?'-':t.temperatura+' ºC'}</div>
+        <div class="kv">Nivel: <strong>${(t.volumen||0).toLocaleString('es-ES')}</strong> L ${t.litros15!=null?(' · 15º: <strong>'+t.litros15.toLocaleString('es-ES')+'</strong> L'):''}</div>
+        <div class="bar"><div class="fill" style="width:${t.porcentaje? t.porcentaje.toFixed(1):0}% ; background:${t.color||'#4f8cc9'}"></div></div>
+      </div>`).join('');
+    }catch(e){ msg('Error al cargar: '+(e.message||e)); }
+  })();
+  </script>
+</body>
+</html>
