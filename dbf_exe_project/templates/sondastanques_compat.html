@@ -2,92 +2,39 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sondas · Compat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Compat Tanques</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='sondastanques_mod.css') }}">
-  <style>
-    body{ background:#0b1522; margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#e7eef6;}
-    .container{ padding:10px; }
-    .status{ padding:10px; font-size:14px; color:#9bb0c8; }
-  </style>
+  <style>body{background:transparent}</style>
 </head>
 <body>
-  <div class="container">
-    <div id="status" class="status">Cargando...</div>
-    <section id="grid" class="grid"></section>
-  </div>
-
+  <main id="grid" style="padding:10px">Cargando…</main>
   <script>
-  // Helper
-  const $ = (q, el=document) => el.querySelector(q);
-  const grid = $("#grid"); const statusEl = $("#status");
-
-  function fmt(x){ if(x===null||x===undefined) return "–"; if(typeof x==="number") return x.toLocaleString("es-ES"); return x; }
-
-  async function fetchJSON(url, opts={}){
-    const ctrl = new AbortController();
-    const to = setTimeout(()=>ctrl.abort(), opts.timeout||8000);
+  (async()=>{
+    const grid = document.getElementById('grid');
+    const show = (m)=> grid.innerHTML = '<div style="padding:10px;color:#9bb0c8">'+m+'</div>';
     try{
-      const r = await fetch(url, {signal: ctrl.signal});
-      const j = await r.json();
-      return j;
-    }finally{ clearTimeout(to); }
-  }
-
-  function render(data){
-    grid.innerHTML = "";
-    if(!data || !data.length){ statusEl.textContent = "Sin datos para mostrar."; return; }
-    statusEl.textContent = "";
-    for(const t of data){
-      const card = document.createElement("article");
-      card.className = "card";
-      const h3 = document.createElement("h3");
-      const badge = `<span class="badge" style="background:${t.color||'#4f8cc9'}22;border-color:${t.color||'#4f8cc9'}88">${t.producto||''}</span>`;
-      h3.innerHTML = `<span>${t.nombre||('Tanque '+t.tanque_id)}</span>${badge}`;
-      card.appendChild(h3);
-
-      const meta = document.createElement("div");
-      meta.className = "meta";
-      meta.innerHTML = `Almacén: <strong>${t.almacen}</strong> · Cap: <strong>${fmt(t.capacidad)}</strong> L · Temp: <strong>${fmt(t.temperatura)}</strong> ºC`;
-      card.appendChild(meta);
-
-      const bar = document.createElement("div");
-      bar.className = "bar";
-      const fill = document.createElement("div");
-      fill.className = "fill";
-      fill.style.background = t.color || 'var(--accent)';
-      fill.style.width = (t.porcentaje||0) + "%";
-      bar.appendChild(fill);
-      card.appendChild(bar);
-
-      const label = document.createElement("div");
-      label.className = "label";
-      label.innerHTML = `Nivel: <strong>${fmt(t.volumen)}</strong> L · 15º: <strong>${fmt(t.litros15)}</strong> L <span><strong>${t.porcentaje!=null?t.porcentaje.toFixed(1):'–'}%</strong></span>`;
-      card.appendChild(label);
-
-      grid.appendChild(card);
-    }
-  }
-
-  async function initCompat(){
-    try{
-      statusEl.textContent = "Cargando almacenes…";
-      const ja = await fetchJSON("/api/almacenes");
-      let alm = null;
-      if(ja && ja.ok && ja.data && ja.data.length){
-        alm = ja.data[0].codigo;
-      }
-      statusEl.textContent = "Cargando tanques…";
-      const url = alm ? ("/api/tanques_norm?almacen="+encodeURIComponent(alm)) : "/api/tanques_norm";
-      const jt = await fetchJSON(url);
-      if(!jt || !jt.ok){ statusEl.textContent = "Error: " + (jt && jt.error ? jt.error : "no se pudo cargar"); return; }
-      render(jt.data);
-    }catch(e){
-      statusEl.textContent = "Error al cargar: " + (e && e.message ? e.message : e);
-    }
-  }
-  initCompat();
+      const ra = await fetch('/api/almacenes');
+      const ja = await ra.json();
+      let alm = (ja.ok && ja.data && ja.data.length) ? ja.data[0].codigo : null;
+      const url = alm ? '/api/tanques_norm?almacen='+encodeURIComponent(alm)+'&n=5' : '/api/tanques_norm?n=5';
+      const rt = await fetch(url);
+      const jt = await rt.json();
+      if (!jt.ok) { show('Error: '+(jt.error||'sin datos')); return; }
+      if (!jt.data.length){ show('Sin tanques.'); return; }
+      grid.innerHTML = jt.data.map(t => `
+        <article class="card" style="margin:10px">
+          <h3 style="display:flex;justify-content:space-between;align-items:center">
+            <span>${t.nombre}</span>
+            <span class="badge" style="background:${t.color}22;border:1px solid ${t.color}88;padding:2px 8px;border-radius:999px">${t.producto||''}</span>
+          </h3>
+          <div class="meta">Alm: ${t.almacen} · Cap: ${t.capacidad??'-'} L · Temp: ${t.temperatura??'-'} ºC</div>
+          <div class="label">Nivel: <strong>${(t.volumen??0).toLocaleString('es-ES')}</strong> L ${t.litros15!=null? ' · 15º: <strong>'+t.litros15.toLocaleString('es-ES')+'</strong> L':''}</div>
+          <div class="bar"><div class="fill" style="width:${t.porcentaje? t.porcentaje.toFixed(1):0}% ; background:${t.color}"></div></div>
+        </article>
+      `).join('');
+    }catch(e){ show('Error al cargar: '+(e.message||e)); }
+  })();
   </script>
 </body>
 </html>
