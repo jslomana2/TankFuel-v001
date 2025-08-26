@@ -1,54 +1,59 @@
 
-import os
-import sys
-import json
-from datetime import datetime
+import os, sys
 from pathlib import Path
-from flask import Flask, jsonify, render_template, request, send_from_directory
+from flask import Flask, jsonify, render_template, request
 from dbfread import DBF
 
 APP_NAME = "PROCONSI – Tanques"
+
+FROZEN = bool(getattr(sys, "frozen", False))
 BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
-# When running as EXE, DBFs are next to the EXE; in dev, next to this file.
-DATA_DIR = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(sys.executable).parent if getattr(sys, "frozen", False) else BASE_DIR
 
-app = Flask(__name__, template_folder=str(BASE_DIR / "templates"), static_folder=str(BASE_DIR / "static"))
+# Where are templates/static?
+if FROZEN:
+    tmpl_dir = BASE_DIR / "templates"
+    static_dir = BASE_DIR / "static"
+else:
+    tmpl_dir = Path(__file__).resolve().parent / "templates"
+    static_dir = Path(__file__).resolve().parent / "static"
 
-def _first_key(d, *candidates):
-    """Return first present key in dict `d` for any of the candidate names (case-insensitive)."""
-    lower = {k.lower(): k for k in d.keys()}
-    for cand in candidates:
-        k = lower.get(cand.lower())
-        if k is not None:
-            return k
-    return None
+app = Flask(__name__, template_folder=str(tmpl_dir), static_folder=str(static_dir))
+
+# Data dir: when frozen, by defecto al lado del EXE; puedes pasar ruta como primer argumento
+if len(sys.argv) > 1:
+    DATA_DIR = Path(sys.argv[1])
+elif FROZEN:
+    DATA_DIR = Path(sys.executable).parent
+else:
+    DATA_DIR = Path(__file__).resolve().parent
+
+def rows_by_key(rows):
+    return [{k.lower(): v for k, v in r.items()} for r in rows]
 
 def load_table(name):
-    """Load a DBF table from DATA_DIR with smart encoding fallback."""
     path = (DATA_DIR / f"{name}.DBF")
     if not path.exists():
-        # also try uppercase/lowercase variants
+        # probar variantes
         for alt in [name.upper(), name.lower(), name.capitalize()]:
-            if (DATA_DIR / f"{alt}.DBF").exists():
-                path = DATA_DIR / f"{alt}.DBF"
-                break
+            p = DATA_DIR / f"{alt}.DBF"
+            if p.exists():
+                path = p; break
     if not path.exists():
         raise FileNotFoundError(f"No se encuentra {name}.DBF en {DATA_DIR}")
-    # Try common encodings used in FoxPro DBFs in ES environments
-    for enc in ("cp1252", "latin1", "cp850"):
+    for enc in ("cp1252","latin1","cp850"):
         try:
             return list(DBF(str(path), encoding=enc, ignore_missing_memofile=True))
         except Exception:
             continue
-    # last resort
-    return list(DBF(str(path), encoding='latin1', ignore_missing_memofile=True))
+    return list(DBF(str(path), encoding="latin1", ignore_missing_memofile=True))
 
-def rows_by_key(rows):
-    """Return lowercase-key dicts for case-insensitive access while keeping originals."""
-    out = []
-    for r in rows:
-        out.append({k.lower(): v for k, v in r.items()})
-    return out
+def _flt(x):
+    try:
+        if x is None or (isinstance(x, str) and x.strip() == ""):
+            return None
+        return float(x)
+    except Exception:
+        return None
 
 @app.route("/")
 def index():
@@ -58,16 +63,15 @@ def index():
 def api_almacenes():
     try:
         alms = rows_by_key(load_table("FFALMA"))
-        # Guess field names
-        result = []
+        out = []
         for r in alms:
             cod = r.get("codalm") or r.get("codigo") or r.get("id") or r.get("almacen") or r.get("cod_alm") or r.get("cod")
             nom = r.get("desalm") or r.get("nombre") or r.get("descripcion") or r.get("des_alm")
-            if not cod:
+            if not cod: 
                 continue
-            result.append({"codigo": str(cod).strip(), "nombre": (str(nom).strip() if nom else str(cod).strip())})
-        result.sort(key=lambda x: x["codigo"])
-        return jsonify({"ok": True, "data": result})
+            out.append({"codigo": str(cod).strip(), "nombre": (str(nom).strip() if nom else str(cod).strip())})
+        out.sort(key=lambda x: x["codigo"])
+        return jsonify({"ok": True, "data": out})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -75,23 +79,15 @@ def api_almacenes():
 def api_articulos():
     try:
         arts = rows_by_key(load_table("FFARTI"))
-        result = []
+        data = []
         for r in arts:
             cod = r.get("codart") or r.get("codigo") or r.get("id") or r.get("articulo") or r.get("cod_art") or r.get("cod")
             nom = r.get("desart") or r.get("nombre") or r.get("descripcion") or r.get("des_art")
             color = r.get("color") or r.get("colorrgb") or r.get("color_rgb") or "#4f8cc9"
-            result.append({"codigo": str(cod).strip(), "nombre": (str(nom).strip() if nom else str(cod).strip()), "color": str(color).strip()})
-        return jsonify({"ok": True, "data": result})
+            data.append({"codigo": str(cod).strip(), "nombre": (str(nom).strip() if nom else str(cod).strip()), "color": str(color).strip()})
+        return jsonify({"ok": True, "data": data})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
-
-def _flt(x):
-    try:
-        if x is None or (isinstance(x, str) and x.strip() == ""):
-            return None
-        return float(x)
-    except Exception:
-        return None
 
 @app.route("/api/tanques_norm")
 def api_tanques_norm():
@@ -117,17 +113,17 @@ def api_tanques_norm():
                     pct = max(0.0, min(100.0, (niv / cap) * 100.0))
                 except Exception:
                     pct = None
-            artname = None
+            artname = ""
             artcolor = "#4f8cc9"
             if art in arts_index:
                 a = arts_index[art]
-                artname = a.get("desart") or a.get("nombre")
+                artname = a.get("desart") or a.get("nombre") or ""
                 artcolor = a.get("colorrgb") or a.get("color") or artcolor
             data.append({
                 "tanque_id": str(tid),
                 "almacen": str(alm) if alm is not None else "",
                 "articulo": str(art) if art is not None else "",
-                "articulo_nombre": artname or "",
+                "articulo_nombre": artname,
                 "color": artcolor,
                 "nombre": str(nomtan),
                 "capacidad": cap,
@@ -146,7 +142,6 @@ def api_calibraciones():
     n = int(request.args.get("n", 120))
     try:
         cal = rows_by_key(load_table("FFCALA"))
-        # Guess fields
         out = []
         for r in cal:
             tid = r.get("idtanq") or r.get("tanque") or r.get("id") or r.get("codtan")
@@ -172,14 +167,16 @@ def api_calibraciones():
 def api_where():
     return jsonify({
         "ok": True,
-        "cwd": str(os.getcwd()),
+        "frozen": FROZEN,
         "base_dir": str(BASE_DIR),
+        "tmpl_dir": str(tmpl_dir),
+        "static_dir": str(static_dir),
         "data_dir": str(DATA_DIR),
-        "frozen": bool(getattr(sys, "frozen", False)),
-        "files": [p for p in os.listdir(DATA_DIR) if p.lower().endswith(".dbf")]
+        "files": [p for p in os.listdir(DATA_DIR) if p.lower().endswith(".dbf")] if DATA_DIR.exists() else []
     })
 
 if __name__ == "__main__":
+    import os
     port = int(os.environ.get("PORT", "5000"))
     print(f"Iniciando servidor en http://127.0.0.1:{port}")
     app.run(host="127.0.0.1", port=port, debug=True)
