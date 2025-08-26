@@ -133,7 +133,7 @@ def index_by_key(rows: List[Dict[str, Any]], key_field: Optional[str]) -> Dict[A
     if not key_field: return {}
     return { r.get(key_field): r for r in rows }
 
-def load_tanques_norm(base_dir: str, almacen_filter: Optional[str]=None) -> List[Dict[str, Any]]:
+def load_tanques_norm(base_dir: str, almacen_filter: Optional[str]=None, want_debug: bool=False) -> List[Dict[str, Any]]:
     maestros = load_maestros(base_dir)
     tanques = maestros["tanques"]
     f_idtanq=f_idalma=f_idarti=None
@@ -171,6 +171,7 @@ def load_tanques_norm(base_dir: str, almacen_filter: Optional[str]=None) -> List
         grouped[key] = rows[:5]
 
     salida = []
+    filtered_reasons = []
     for t in tanques:
         alma = t.get(f_idalma) if f_idalma else None
         tanq = t.get(f_idtanq) if f_idtanq else None
@@ -180,6 +181,8 @@ def load_tanques_norm(base_dir: str, almacen_filter: Optional[str]=None) -> List
             continue
         bunch = grouped.get((str(alma), str(tanq)), [])
         if not bunch:
+            if want_debug:
+                filtered_reasons.append({"tanque": str(t.get(f_idtanq)), "motivo": "sin lecturas en FFCALA"})
             continue
 
         lit_vals  = [_normalize_float(r.get(c_litros)) if c_litros else None for r in bunch]
@@ -191,6 +194,8 @@ def load_tanques_norm(base_dir: str, almacen_filter: Optional[str]=None) -> List
         temperatura = _last_non_null(tmp_vals)
 
         if volumen is None or litros15 is None or temperatura is None:
+            if want_debug:
+                filtered_reasons.append({"tanque": str(t.get(f_idtanq)), "motivo": f"falta dato (volumen={volumen}, l15={litros15}, temp={temperatura}) en últimas 5"})
             continue
 
         f_cap = _find_field(list(t.keys()), "CAPACIDAD", "MAX", "MAXIMO", "CAPA")
@@ -229,9 +234,10 @@ def favicon():
 @app.route("/api/tanques_norm")
 def api_tanques_norm():
     almacen = request.args.get("almacen")
+    dbg = request.args.get("debug") == "1"
     base_dir = os.getcwd()
     try:
-        data = load_tanques_norm(base_dir, almacen_filter=almacen)
+        data = load_tanques_norm(base_dir, almacen_filter=almacen, want_debug=dbg)
         return jsonify({"ok": True, "count": len(data), "tanques": data})
     except Exception as e:
         log.exception("Error en /api/tanques_norm")

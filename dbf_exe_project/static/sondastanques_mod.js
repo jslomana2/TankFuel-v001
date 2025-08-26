@@ -26,24 +26,37 @@ async function loadAlmacenes(){
     const sel = document.getElementById('almacenSelect');
     sel.innerHTML = '<option value="">Todos</option>';
     const items = data.almacenes || [];
-    // detectar posibles campos ID y DESCRIPCIÓN flexibles
     const sample = items[0] || {};
     const keys = Object.keys(sample);
-    function findKey(...cands){
-      const lower = k => k.toLowerCase();
+    const lower = k => String(k).toLowerCase();
+
+    function findKeyStrict(...cands){
       for(const c of cands){
-        const hit = keys.find(k => lower(k)===c.toLowerCase() || lower(k).includes(c.toLowerCase()));
+        const hit = keys.find(k => lower(k)===lower(c));
         if(hit) return hit;
       }
       return null;
     }
-    const fId = findKey('IDALMA','CODALMA','ALMACEN','ID_ALMA') || 'IDALMA';
-    const fNm = findKey('NOMBRE','DESCRIPCION','DESCR','NOMALMA') || fId;
+    function findKeyLoose(...cands){
+      for(const c of cands){
+        const hit = keys.find(k => lower(k).includes(lower(c)));
+        if(hit) return hit;
+      }
+      return null;
+    }
+
+    // 1) Prioriza CODIGO explícitamente (tu caso FFALMA.CODIGO)
+    let fId = findKeyStrict('CODIGO')
+           || findKeyStrict('IDALMA','CODALMA','ALMACEN','ID_ALMA')
+           || findKeyLoose('CODALM','ID');
+    let fNm = findKeyStrict('NOMBRE','DESCRIPCION','DESCR','NOMALMA','NOM_ALMA') || fId;
+
     for(const a of items){
-      const id = a[fId];
-      const nm = a[fNm] ?? id;
+      let id = a && fId ? a[fId] : undefined;
+      if (id===undefined || id===null || String(id).trim()==='') continue; // no opciones inválidas
+      const nm = (fNm && a[fNm]!=null && String(a[fNm]).trim()!=='') ? a[fNm] : id;
       const opt = document.createElement('option');
-      opt.value = id;
+      opt.value = String(id);
       opt.textContent = `${id} – ${nm}`;
       sel.appendChild(opt);
     }
@@ -51,6 +64,8 @@ async function loadAlmacenes(){
     console.error(e);
   }
 }
+
+
 
 async function loadTanques(){
   const grid = document.getElementById('tanquesGrid');
