@@ -6,45 +6,37 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-
     env:
-      proyecto_dir: dbf_exe_project   # <- tu carpeta con app.py, templates/, static/
-
+      proyecto_dir: dbf_exe_project
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      # (opcional) ver estructura para confirmar la ruta
-      - name: Mostrar estructura (debug)
+      - name: Show tree
         run: |
-          echo Workspace: %CD%
+          echo %CD%
           dir /b
           echo ----
           dir %proyecto_dir% /b
         shell: cmd
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
-      - name: Instalar dependencias
+      - name: Install deps
         run: |
           cd %proyecto_dir%
           py -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
         shell: cmd
-
-      - name: Compilar EXE (incluye templates/static)
+      - name: Build EXE
         run: |
           cd %proyecto_dir%
           pyinstaller -F -n PROCONSI-Tanques app.py ^
             --add-data "templates;templates" ^
             --add-data "static;static"
         shell: cmd
-
-      - name: Subir artefacto
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: PROCONSI-Tanques_EXE
