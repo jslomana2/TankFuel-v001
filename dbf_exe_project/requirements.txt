@@ -1,3 +1,0 @@
-Flask==3.0.3
-dbfread==2.0.7
-waitress==3.0.0
