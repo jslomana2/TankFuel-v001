@@ -10,8 +10,9 @@
 </meta>  <link rel="stylesheet" href="{{ url_for('static', filename='sondastanques_mod.css') }}">
 </head>
 <body>
-<div class="wrap">
 <header>
+  <div class="container">
+
 <div class="h-inner">
 <a class="brand" href="https://www.proconsi.com" rel="noopener" target="_blank">
 <img alt="Proconsi" onerror="this.style.display='none'; this.parentNode.insertAdjacentHTML('beforeend','&lt;strong&gt;PROCONSI&lt;/strong&gt;')" src="https://cdn-ildmohp.nitrocdn.com/OlNFhHrAqkTDgXLhkVWXZfchjFGWnneH/assets/images/optimized/rev-7a6779b/proconsi.com/wp-content/uploads/Logotipo-completo-Proconsi-PNG-1.png"/>
@@ -27,7 +28,10 @@
 <button id="nextBtn" title="Almacén siguiente">→</button>
 </div>
 </div><div class="h-sub"><label class="chk-all"><input id="allToggle" type="checkbox"/><span>Ver todos los almacenes</span></label></div>
+
+  </div>
 </header>
+<div class="wrap">
 <div class="grid" id="grid"></div>
 <div aria-label="Totales por producto" id="totales"></div>
 <div hidden="" id="histPanel">

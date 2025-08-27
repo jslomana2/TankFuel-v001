@@ -12,7 +12,7 @@
     color:var(--text);
     font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
   .wrap{max-width:1400px;margin:0 auto}
-  header{position:sticky; top:0; z-index:10; background:#fff; color:#0b1220; border-bottom:1px solid #e6e9ee;}
+  /* header rule moved to full-bleed variant below */
   .h-inner{display:flex;align-items:center;gap:12px;padding:10px 16px;flex-wrap:wrap}
   .brand img{height:26px;display:block}
   .title{font-weight:700;letter-spacing:.2px}
@@ -89,7 +89,21 @@
   }
 
 "+css+"
-/* Segunda línea del header */
-.h-sub{display:flex;align-items:center;gap:12px;padding:8px 16px;border-top:1px solid #e6e9ee;background:#fff;color:#0b1220}
-.h-sub .chk-all{display:inline-flex;align-items:center;gap:8px;font-size:13px}
-.h-sub input[type="checkbox"]{width:16px;height:16px;accent-color:#0b1220}
+
+
+/* Full-width header with inner container */
+header{position:sticky; top:0; z-index:10; background:#fff; color:#0b1220; border-bottom:1px solid #e6e9ee; width:100%;}
+header .container{max-width:1400px; margin:0 auto; padding:0;}
+/* Responsive controls: allow wrapping and growing */
+.h-inner{display:flex; align-items:center; gap:12px; padding:10px 16px; flex-wrap:wrap}
+.ctrls{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.ctrls select{min-width:220px; flex:1 1 260px}
+.ctrls button{flex:0 0 auto}
+/* Subheader full width */
+.h-sub{display:flex; align-items:center; gap:12px; padding:8px 16px; border-top:1px solid #e6e9ee; background:#fff; color:#0b1220}
+/* On narrow screens stack everything nicely */
+@media (max-width: 900px){
+  .title{flex:1 1 100%}
+  #summary{order:3}
+  .ctrls{flex:1 1 100%; justify-content:flex-start}
+}
