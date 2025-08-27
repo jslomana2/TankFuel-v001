@@ -1,1 +1,42 @@
-<!doctype html><meta charset='utf-8'><title>Tanques</title><link rel='stylesheet' href='/static/sondastanques_mod.css'><header><label>Almacén: <select id='almacenSelect'></select></label><button id='refreshBtn'>Refrescar</button></header><section id='tanquesGrid'></section><footer id='resumen'></footer><script src='/static/sondastanques_mod.js'></script>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PROCONSI · SondaTanques</title>
+  <link rel="stylesheet" href="/static/sondastanques_mod.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="/static/proconsi.svg" alt="PROCONSI" class="logo"/>
+      <span class="title">SondaTanques</span>
+    </div>
+    <div class="controls">
+      <label>Almacén:</label>
+      <select id="almacenSelect"></select>
+      <button id="refreshBtn" class="btn">Refrescar</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section id="grid" class="grid">
+      <div class="empty">Sin tanques con lecturas válidas.</div>
+    </section>
+    <aside class="panel">
+      <div class="card">
+        <h3>Detalle</h3>
+        <div id="detalle">Pulsa un tanque…</div>
+      </div>
+      <div class="card">
+        <h3>Resumen por producto</h3>
+        <div id="resumen"></div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="foot">© PROCONSI</footer>
+
+  <script src="/static/sondastanques_mod.js"></script>
+</body>
+</html>

@@ -21,7 +21,6 @@ def _read_dbf(path: str):
     return list(DBF(path, ignore_missing_memofile=True, recfactory=dict, char_decode_errors='ignore'))
 
 def _dt(fecha, hora):
-    # Acepta int/float/str ('94523', '094523', '9:45:23', '94523.0', etc.)
     try:
         if fecha is None or hora is None: return None
         y,m,d = fecha.year, fecha.month, fecha.day
@@ -203,12 +202,14 @@ def api_where():
 @app.route("/favicon.ico")
 def ico(): return Response(status=204)
 
-def _open(url):
-    try: webbrowser.open(url, new=1, autoraise=True)
-    except Exception: pass
+def _open_browser_once(url):
+    # Evita doble apertura por el reloader de Flask
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        try: webbrowser.open(url, new=1, autoraise=True)
+        except Exception: pass
 
 if __name__=="__main__":
     port=int(os.environ.get("PORT","5000")); url=f"http://127.0.0.1:{port}"
-    threading.Timer(1.0, _open, args=(url,)).start()
+    threading.Timer(1.0, _open_browser_once, args=(url,)).start()
     log.info(f"Iniciando servidor en {url}")
     app.run(host="127.0.0.1", port=port, debug=True)
