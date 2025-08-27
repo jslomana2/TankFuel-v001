@@ -263,7 +263,7 @@ function renderOneAlmacen(a){
   // encabezado de sección
   var section = document.createElement("section"); section.className = "almacenSection";
   var h = document.createElement("h2"); h.className="almacenTitle";
-  h.textContent = (a.nombre||"Almacén");
+  h.textContent = (a.id||"") + " – " + (a.nombre||"Almacén");
   section.appendChild(h);
   section.appendChild(grid);
   // totales del almacen
@@ -321,8 +321,8 @@ function render(){
       var nm = document.createElement("div"); nm.className="name"; nm.textContent = (t.nombre||"TANQUE");
       // Estado por porcentaje (Alto/Medio/Bajo)
 var __p = (typeof pct === "number") ? pct : ((t.capacidad>0)? Math.max(0, Math.min(100, (t.volumen/t.capacidad)*100)) : 0);
-var __nivel = (__p > 70) ? "Alto" : ((__p >= 21) ? "Medio" : "Bajo");
-var __nivelColor = (__p > 70) ? "#16a34a" : ((__p >= 21) ? "#f59e0b" : "#ef4444");
+var __nivel = (pct > 60) ? "Alto" : ((pct >= 21) ? "Medio" : "Bajo");
+var __nivelColor = (pct > 60) ? "#16a34a" : ((pct >= 21) ? "#f59e0b" : "#ef4444");
 var st = document.createElement("div"); st.className="status";
 var dt = document.createElement("span"); dt.className="dot"; dt.style.background = __nivelColor;
 var stx = document.createElement("span"); stx.textContent = __nivel;
