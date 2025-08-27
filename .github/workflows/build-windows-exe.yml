@@ -8,22 +8,24 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install deps
         run: |
-          pip install --upgrade pip
-          pip install -r dbf_exe_project/requirements.txt
-          pip install pyinstaller
+          python -m pip install --upgrade pip
+          python -m pip install -r dbf_exe_project/requirements.txt
+          python -m pip install pyinstaller
 
       - name: Ensure static and templates exist
+        shell: pwsh
         run: |
           if (-Not (Test-Path "dbf_exe_project\static")) { New-Item -ItemType Directory -Path "dbf_exe_project\static" | Out-Null }
           if (-Not (Test-Path "dbf_exe_project\templates")) { New-Item -ItemType Directory -Path "dbf_exe_project\templates" | Out-Null }
@@ -31,7 +33,9 @@ jobs:
       - name: Build EXE
         working-directory: dbf_exe_project
         run: |
-          py -m PyInstaller -F -n "PROCONSI-Tanques" app.py --add-data "templates;templates" --add-data "static;static"
+          python -m PyInstaller -F -n "PROCONSI-Tanques" app.py ^
+            --add-data "templates;templates" ^
+            --add-data "static;static"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
