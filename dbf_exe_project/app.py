@@ -19,7 +19,7 @@ def _dt(fecha, hora):
     try:
         if fecha is None or hora is None: return None
         y,m,d = fecha.year, fecha.month, fecha.day
-        s=str(hora).zfill(6); h=int(s[0:2]); mi=int(s[2:4]); se=int(s[4:6])
+        s=str(hora).strip().zfill(6); h=int(s[0:2]); mi=int(s[2:4]); se=int(s[4:6])
         return datetime(y,m,d,h,mi,se)
     except: return None
 def _f(v):
@@ -32,10 +32,11 @@ def _hex(n):
         if n is None: return None
         return "#" + format(int(float(n)) & 0xFFFFFF, "06X")
     except: return None
-def load_almacenes(base):
+def load_almacenes_all(base):
     rows = _read_dbf(os.path.join(base, "FFALMA.DBF"))
     out = [{"codigo": str(r.get("CODIGO")), "nombre": str(r.get("POBLACION") or "")} for r in rows]
-    out.sort(key=lambda x: x["codigo"]); return out
+    out.sort(key=lambda x: x["codigo"] or "")
+    return out
 def load_articulos(base):
     rows = _read_dbf(os.path.join(base, "FFARTI.DBF"))
     return {str(r.get("CODIGO")): {"nombre": str(r.get("DESCRI") or ""), "color": _hex(r.get("COLORPRODU")) or "#2E8B57"} for r in rows}
@@ -43,16 +44,26 @@ def load_tanques(base):
     rows = _read_dbf(os.path.join(base, "FFTANQ.DBF"))
     out=[]; 
     for r in rows:
-        out.append({"almacen": str(r.get("ALMACEN") or r.get("CODALMA") or r.get("IDALMA") or ""), "tanque": str(r.get("CODIGO")), "articulo": str(r.get("ARTICULO")), "nombre": str(r.get("DESCRI") or ""), "capacidad": _f(r.get("CAPACIDAD"))})
+        out.append({"almacen": str(r.get("ALMACEN") or r.get("CODALMA") or r.get("IDALMA") or ""),
+                    "tanque": str(r.get("CODIGO")),
+                    "articulo": str(r.get("ARTICULO")),
+                    "nombre": str(r.get("DESCRI") or ""),
+                    "capacidad": _f(r.get("CAPACIDAD"))})
     return out
 def load_calados(base):
     rows = _read_dbf(os.path.join(base, "FFCALA.DBF"))
     out=[]; 
     for r in rows:
-        out.append({"almacen": str(r.get("ALMACEN")), "tanque": str(r.get("CODIGO")), "dt": _dt(r.get("FECHA"), r.get("HORA")), "litros": _f(r.get("LITROS")), "litros15": _f(r.get("LITROS15")), "temperatura": _f(r.get("TEMPERA"))})
+        out.append({"almacen": str(r.get("ALMACEN")),
+                    "tanque": str(r.get("CODIGO")),
+                    "dt": _dt(r.get("FECHA"), r.get("HORA")),
+                    "litros": _f(r.get("LITROS")),
+                    "litros15": _f(r.get("LITROS15")),
+                    "temperatura": _f(r.get("TEMPERA"))})
     return out
-def latest(calados):
-    calados=[c for c in calados if c["dt"] is not None]; calados.sort(key=lambda x:(x["almacen"],x["tanque"],x["dt"]), reverse=True)
+def latest_valid_by_tank(calados):
+    calados=[c for c in calados if c["dt"] is not None]
+    calados.sort(key=lambda x:(x["almacen"],x["tanque"],x["dt"]), reverse=True)
     latest={}
     for c in calados:
         k=(c["almacen"], c["tanque"])
@@ -60,18 +71,26 @@ def latest(calados):
         if c["litros"] is None or c["litros15"] is None or c["temperatura"] is None: continue
         latest[k]=c
     return latest
+def filter_almacenes_with_data(base):
+    almacenes = load_almacenes_all(base)
+    calados = load_calados(base)
+    last = latest_valid_by_tank(calados)
+    valid = {k[0] for k in last.keys()}
+    return [a for a in almacenes if a["codigo"] in valid]
 def build_resp(base, almacen_sel=None):
-    almacenes=load_almacenes(base)
-    if not almacenes: return {"ok": True, "almacenes": [], "tanques": [], "resumen_productos":[]}
+    almacenes = filter_almacenes_with_data(base)
+    if not almacenes: return {"ok": True, "almacenes": [], "tanques": [], "resumen_productos": []}
     if not almacen_sel: almacen_sel = almacenes[0]["codigo"]
-    art=load_articulos(base); tqs=load_tanques(base); cal=load_calados(base); last=latest(cal)
+    art=load_articulos(base); tqs=load_tanques(base); cal=load_calados(base); last=latest_valid_by_tank(cal)
     tanques_out=[]
     for t in tqs:
         if t["almacen"]!=str(almacen_sel): continue
         k=(t["almacen"], t["tanque"]); c=last.get(k)
         if not c: continue
         a=art.get(t["articulo"], {"nombre": None, "color": None})
-        tanques_out.append({"almacen": t["almacen"], "tanque": t["tanque"], "tanque_nombre": t["nombre"], "producto": t["articulo"], "producto_nombre": a["nombre"], "producto_color": a["color"], "capacidad": t["capacidad"], "volumen": c["litros"], "litros15": c["litros15"], "temperatura": c["temperatura"]})
+        tanques_out.append({"almacen": t["almacen"], "tanque": t["tanque"], "tanque_nombre": t["nombre"],
+                            "producto": t["articulo"], "producto_nombre": a["nombre"], "producto_color": a["color"],
+                            "capacidad": t["capacidad"], "volumen": c["litros"], "litros15": c["litros15"], "temperatura": c["temperatura"]})
     total=sum([(x["litros15"] or 0) for x in tanques_out]) or 1.0
     res={}
     for x in tanques_out:
@@ -79,15 +98,20 @@ def build_resp(base, almacen_sel=None):
         r["total_litros15"] += x["litros15"] or 0; r["num_tanques"] += 1
     for r in res.values(): r["porcentaje"]=round((r["total_litros15"]/total)*100,1)
     return {"ok": True, "almacen": almacen_sel, "almacenes": almacenes, "tanques": tanques_out, "resumen_productos": list(res.values())}
-@app.route("/") 
+@app.route("/")
 def home(): return render_template("sondastanques_mod.html")
+@app.route("/compat")
+def compat(): return Response(status=204)
 @app.route("/favicon.ico")
 def ico(): return Response(status=204)
 @app.route("/api/almacenes")
-def api_alma(): return jsonify({"ok": True, "almacenes": load_almacenes(os.getcwd())})
+def api_alma(): return jsonify({"ok": True, "almacenes": filter_almacenes_with_data(os.getcwd())})
 @app.route("/api/tanques_norm")
 def api_tq(): return jsonify(build_resp(os.getcwd(), request.args.get("almacen")))
 @app.route("/api/where")
 def api_where(): return jsonify({"cwd": os.getcwd(), "files": sorted(os.listdir(os.getcwd()))})
 if __name__ == "__main__":
-    port=int(os.environ.get("PORT","5000")); url=f"http://127.0.0.1:{port}"; threading.Timer(1.0, lambda: webbrowser.open(url, new=1, autoraise=True)).start(); log.info(f"Iniciando servidor en {url}"); app.run(host="127.0.0.1", port=port, debug=True)
+    port=int(os.environ.get("PORT","5000")); url=f"http://127.0.0.1:{port}"
+    threading.Timer(1.0, lambda: webbrowser.open(url, new=1, autoraise=True)).start()
+    log.info(f"Iniciando servidor en {url}")
+    app.run(host="127.0.0.1", port=port, debug=True)
