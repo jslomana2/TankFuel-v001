@@ -1,38 +1,40 @@
 name: Build Windows EXE
-on: { workflow_dispatch: {} }
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
 jobs:
   build:
     runs-on: windows-latest
-    env: { proyecto_dir: dbf_exe_project }
     steps:
-      - uses: actions/checkout@v4
-      - name: Debug estructura
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
         run: |
-          echo Raiz del repo:
-          dir /b
-          echo ----
-          echo Contenido de %proyecto_dir%:
-          dir %proyecto_dir% /b
-        shell: cmd
-      - uses: actions/setup-python@v5
-        with: { python-version: '3.11' }
-      - name: Instalar dependencias
-        run: |
-          cd %proyecto_dir%
-          py -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install --upgrade pip
+          pip install -r dbf_exe_project/requirements.txt
           pip install pyinstaller
-        shell: cmd
-      - name: Compilar EXE (incluye templates/static)
+
+      - name: Ensure static and templates exist
         run: |
-          cd %proyecto_dir%
-          pyinstaller -F -n PROCONSI-Tanques app.py ^
-            --add-data "templates;templates" ^
-            --add-data "static;static"
-        shell: cmd
-      - name: Subir artefacto
+          if (-Not (Test-Path "dbf_exe_project\static")) { New-Item -ItemType Directory -Path "dbf_exe_project\static" | Out-Null }
+          if (-Not (Test-Path "dbf_exe_project\templates")) { New-Item -ItemType Directory -Path "dbf_exe_project\templates" | Out-Null }
+
+      - name: Build EXE
+        working-directory: dbf_exe_project
+        run: |
+          py -m PyInstaller -F -n "PROCONSI-Tanques" app.py --add-data "templates;templates" --add-data "static;static"
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PROCONSI-Tanques_EXE
-          path: dbf_exe_project\dist\PROCONSI-Tanques.exe
-
+          name: PROCONSI-Tanques-exe
+          path: dbf_exe_project/dist/*
