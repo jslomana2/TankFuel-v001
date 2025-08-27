@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 import os, sys, threading, webbrowser, logging, re
 from datetime import datetime
@@ -203,7 +202,6 @@ def api_where():
 def ico(): return Response(status=204)
 
 def _open_browser_once(url):
-    # Evita doble apertura por el reloader de Flask
     if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
         try: webbrowser.open(url, new=1, autoraise=True)
         except Exception: pass
