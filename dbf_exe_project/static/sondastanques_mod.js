@@ -1,5 +1,5 @@
-async function getJSON(u){const r=await fetch(u);if(!r.ok) throw new Error(await r.text());return await r.json();}
-function fmt(n){return (n==null)?'–':Number(n).toLocaleString('es-ES',{maximumFractionDigits:1})}
-async function loadAlmacenes(){const d=await getJSON('/api/almacenes');const sel=document.getElementById('almacenSelect');sel.innerHTML='';(d.almacenes||[]).forEach(a=>{const o=document.createElement('option');o.value=a.codigo;o.textContent=`${a.codigo} – ${a.nombre}`;sel.appendChild(o);});}
-async function loadTanques(){const sel=document.getElementById('almacenSelect');const alm=sel&&sel.value?`?almacen=${encodeURIComponent(sel.value)}`:'';const d=await getJSON('/api/tanques_norm'+alm);const grid=document.getElementById('tanquesGrid');grid.innerHTML='';(d.tanques||[]).forEach(t=>{const div=document.createElement('div');div.className='card';div.innerHTML=`<h3>${t.tanque_nombre??t.tanque}</h3><div>${fmt(t.volumen)} L · ${fmt(t.litros15)} L15 · ${fmt(t.temperatura)} ºC</div>`;grid.appendChild(div);});const res=document.getElementById('resumen');res.innerHTML='';(d.resumen_productos||[]).forEach(r=>{const s=document.createElement('span');s.style.marginRight='8px';s.textContent=`${r.producto_nombre??r.producto}: ${fmt(r.total_litros15)} L (${r.porcentaje}%) · ${r.num_tanques} tqs`;res.appendChild(s);});}
-document.getElementById('refreshBtn').addEventListener('click',loadTanques);document.addEventListener('DOMContentLoaded',async()=>{await loadAlmacenes();await loadTanques();});
+async function getJSON(u){const r=await fetch(u);if(!r.ok) throw new Error(await r.text());return r.json();}
+document.addEventListener('DOMContentLoaded', async()=>{
+  const d=await getJSON('/api/almacenes'); const sel=document.getElementById('almacenSelect');
+  sel.innerHTML=''; (d.almacenes||[]).forEach(a=>{const o=document.createElement('option');o.value=a.codigo;o.textContent=`${a.codigo} – ${a.nombre}`;sel.appendChild(o);});
+});
