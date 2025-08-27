@@ -154,8 +154,8 @@
   }
 
   function exportCsv(filename, rows){
-    var csv = "Fecha;Medido (L);Libro (L);Diferencia (L)\\r\\n";
-    (rows||[]).forEach(function(r){ var d=(r.medido||0)-(r.libro||0); csv += [r.fecha, r.medido||0, r.libro||0, d].join(";") + "\\r\\n"; });
+    var csv = "Fecha;Medido (L);Libro (L);Diferencia (L)\r\n";
+    (rows||[]).forEach(function(r){ var d=(r.medido||0)-(r.libro||0); csv += [r.fecha, r.medido||0, r.libro||0, d].join(";") + "\r\n"; });
     var blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
     if(window.navigator.msSaveOrOpenBlob){ window.navigator.msSaveOrOpenBlob(blob, filename); }
     else{ var a=document.createElement("a"); var url=URL.createObjectURL(blob); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 0); }
@@ -222,8 +222,6 @@
       liquid.style.setProperty("--fill", col);
       liquid.style.setProperty("--fillLight", colLight);
       var pct = (t.capacidad>0)? percent((t.volumen/t.capacidad)*100) : 0; liquid.style.height = pct+"%";
-      var __nivel = (pct>70)?"Alto":(pct>=21)?"Medio":"Bajo";
-      var __nivelColor = (pct>70)?"#16a34a":(pct>=21)?"#f59e0b":"#ef4444";
       var w1=document.createElement("div"); w1.className="wave";
       var w2=document.createElement("div"); w2.className="wave wave2";
       var w3=document.createElement("div"); w3.className="wave wave3";
@@ -239,24 +237,14 @@
       var info = document.createElement("div");
       var r1 = document.createElement("div"); r1.style.display="flex"; r1.style.alignItems="center"; r1.style.justifyContent="space-between"; r1.style.margin="4px 0";
       var nm = document.createElement("div"); nm.className="name"; nm.textContent = (t.nombre||"TANQUE");
-      
-// Estado según porcentaje
-var estado, color;
-if (pct > 70) {
-  estado = "Alto";
-  color = "#16a34a"; // verde
-} else if (pct >= 21) {
-  estado = "Medio";
-  color = "#f59e0b"; // amarillo
-} else {
-  estado = "Bajo";
-  color = "#ef4444"; // rojo
-}
+      // Estado por porcentaje (Alto/Medio/Bajo)
+var __p = (typeof pct === "number") ? pct : ((t.capacidad>0)? Math.max(0, Math.min(100, (t.volumen/t.capacidad)*100)) : 0);
+var __nivel = (__p > 70) ? "Alto" : ((__p >= 21) ? "Medio" : "Bajo");
+var __nivelColor = (__p > 70) ? "#16a34a" : ((__p >= 21) ? "#f59e0b" : "#ef4444");
 var st = document.createElement("div"); st.className="status";
-var dt = document.createElement("span"); dt.className="dot"; dt.style.background = color;
-var stx = document.createElement("span"); stx.textContent = estado;
+var dt = document.createElement("span"); dt.className="dot"; dt.style.background = __nivelColor;
+var stx = document.createElement("span"); stx.textContent = __nivel;
 st.appendChild(dt); st.appendChild(stx);
-
       r1.appendChild(nm); r1.appendChild(st);
       info.appendChild(r1);
 
