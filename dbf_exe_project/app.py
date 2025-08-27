@@ -52,89 +52,121 @@ def _last_non_null(values):
         return v
     return None
 
+def _norm_code(c: str) -> str:
+    # Normalize almacen code by stripping spaces and leading zeros (but keep '0' as '0')
+    s = ("" if c is None else str(c)).strip()
+    if s == "": return s
+    s2 = s.lstrip("0")
+    return s if s2=="" else s2
+
+# FFALMA
 def load_almacenes_all(base: str):
     rows = _read_dbf(os.path.join(base, "FFALMA.DBF"))
-    out = [{"codigo": str(r.get("CODIGO")), "nombre": str(r.get("POBLACION") or "")} for r in rows]
+    out = [{"codigo": str(r.get("CODIGO")), "nombre": str(r.get("POBLACION") or ""), "key": _norm_code(r.get("CODIGO"))} for r in rows]
     out.sort(key=lambda x: x["codigo"] or "")
     return out
 
+# FFARTI
 def load_articulos(base: str):
     rows = _read_dbf(os.path.join(base, "FFARTI.DBF"))
     return {str(r.get("CODIGO")): {"codigo": str(r.get("CODIGO")), "nombre": str(r.get("DESCRI") or ""), "color": _hex(r.get("COLORPRODU")) or "#2E8B57"} for r in rows}
 
+# FFTANQ
 def load_tanques(base: str):
     rows = _read_dbf(os.path.join(base, "FFTANQ.DBF"))
     out=[]
     for r in rows:
         out.append({"almacen": str(r.get("ALMACEN") or r.get("CODALMA") or r.get("IDALMA") or ""),
+                    "almacen_key": _norm_code(r.get("ALMACEN") or r.get("CODALMA") or r.get("IDALMA") or ""),
                     "tanque":  str(r.get("CODIGO")),
                     "articulo": str(r.get("ARTICULO")),
                     "nombre":   str(r.get("DESCRI") or ""),
                     "capacidad": _f(r.get("CAPACIDAD"))})
-    def keyfunc(t):
-        try: return (t["almacen"], float(t["tanque"]))
-        except Exception: return (t["almacen"], t["tanque"])
-    out.sort(key=keyfunc)
+    def k(t):
+        try: return (t["almacen_key"], float(t["tanque"]))
+        except Exception: return (t["almacen_key"], t["tanque"])
+    out.sort(key=k)
     return out
 
+# FFCALA
 def load_calados(base: str):
     rows = _read_dbf(os.path.join(base, "FFCALA.DBF"))
     out=[]
     for r in rows:
-        out.append({"almacen": str(r.get("ALMACEN")),
+        out.append({"almacen": str(r.get("ALMACEN")), "almacen_key": _norm_code(r.get("ALMACEN")),
                     "tanque":  str(r.get("TANQUE")),
-                    "articulo": str(r.get("ARTICULO")),
-                    "articulo_nombre": str(r.get("DESCRI") or ""),
                     "dt": _dt(r.get("FECHA"), r.get("HORA")),
                     "litros": _f(r.get("LITROS")),
                     "litros15": _f(r.get("LITROS15")),
                     "temperatura": _f(r.get("TEMPERA"))})
     return out
 
-def latest_by_rule(calados):
+def latest_by_rule(calados, n=5):
     groups={}
     for c in calados:
         if c["dt"] is None: continue
-        groups.setdefault((c["almacen"], c["tanque"]), []).append(c)
+        groups.setdefault((c["almacen_key"], c["tanque"]), []).append(c)
     for k in groups:
         groups[k].sort(key=lambda x: x["dt"], reverse=True)
-        groups[k]=groups[k][:5]
-    latest={}
+        groups[k]=groups[k][:max(1,int(n))]
+    latest={}; reasons={}
     for k, rows in groups.items():
         v=_last_non_null([r["litros"] for r in rows])
         l15=_last_non_null([r["litros15"] for r in rows])
         t=_last_non_null([r["temperatura"] for r in rows])
-        if v is None or l15 is None or t is None: continue
+        if v is None or l15 is None or t is None:
+            reasons[k]=f"faltan datos en últimas {len(rows)} (volumen={v}, l15={l15}, temp={t})"
+            continue
         latest[k]={"volumen": v, "litros15": l15, "temperatura": t}
-    return latest
+    return latest, reasons
 
-def filter_almacenes_with_data(base):
-    tqs=load_tanques(base); cal=load_calados(base); last=latest_by_rule(cal)
-    valid={t["almacen"] for t in tqs if (t["almacen"], t["tanque"]) in last}
-    alma=load_almacenes_all(base); name_by={a["codigo"]: a["nombre"] for a in alma}
-    return [{"codigo": c, "nombre": name_by.get(c, "")} for c in sorted(valid) if c in name_by]
+def filter_almacenes_with_data(base, n=5):
+    alma = load_almacenes_all(base)
+    key_to_canon = {a["key"]: a["codigo"] for a in alma}
+    name_by_canon = {a["codigo"]: a["nombre"] for a in alma}
+    tqs = load_tanques(base)
+    cal = load_calados(base)
+    latest, _ = latest_by_rule(cal, n=n)
+    valid = { t["almacen_key"] for t in tqs if (t["almacen_key"], t["tanque"]) in latest }
+    canon_codes = [key_to_canon.get(k) for k in sorted(valid) if key_to_canon.get(k)]
+    return [{"codigo": c, "nombre": name_by_canon.get(c, "")} for c in canon_codes]
 
-def build_response(base, almacen_sel):
-    almacenes=filter_almacenes_with_data(base)
-    if not almacenes: return {"ok": True, "almacenes": [], "tanques": [], "resumen_productos": []}
-    if not almacen_sel: almacen_sel=almacenes[0]["codigo"]
-    art=load_articulos(base); tqs=load_tanques(base); cal=load_calados(base); last=latest_by_rule(cal)
+def build_response(base, almacen_param: Optional[str], n=5, debug=False):
+    alma = load_almacenes_all(base)
+    key_to_canon = {a["key"]: a["codigo"] for a in alma}
+    canon_to_name = {a["codigo"]: a["nombre"] for a in alma}
+    almacenes = filter_almacenes_with_data(base, n=n)
+    if not almacenes:
+        return {"ok": True, "almacenes": [], "tanques": [], "resumen_productos": [], "debug": {"reason":"Sin tanques válidos"}}
+    # normalize seleccion
+    sel_key = _norm_code(almacen_param) if almacen_param else _norm_code(almacenes[0]["codigo"])
+    canon = key_to_canon.get(sel_key, almacenes[0]["codigo"])
+    tqs = load_tanques(base)
+    cal = load_calados(base)
+    latest, reasons = latest_by_rule(cal, n=n)
+    # Artículos
+    art = load_articulos(base)
+
     tanques_out=[]
     for t in tqs:
-        if t["almacen"]!=str(almacen_sel): continue
-        k=(t["almacen"], t["tanque"]); c=last.get(k)
-        if not c: continue
+        if t["almacen_key"] != _norm_code(canon): continue
+        k=(t["almacen_key"], t["tanque"]); c=latest.get(k)
+        if not c:
+            continue
         a=art.get(t["articulo"], {"nombre": None, "color": None})
-        tanques_out.append({"almacen": t["almacen"], "tanque": t["tanque"], "tanque_nombre": t["nombre"],
+        tanques_out.append({"almacen": canon, "tanque": t["tanque"], "tanque_nombre": t["nombre"],
                             "producto": t["articulo"], "producto_nombre": a["nombre"], "producto_color": a["color"],
                             "capacidad": t["capacidad"], **c})
-    total=sum([(x["litros15"] or 0) for x in tanques_out]) or 1.0
-    res={}
+    total = sum([(x["litros15"] or 0) for x in tanques_out]) or 1.0
+    resumen={}
     for x in tanques_out:
-        r=res.setdefault(x["producto"], {"producto": x["producto"], "producto_nombre": x["producto_nombre"], "color_hex": x["producto_color"], "total_litros15":0.0, "num_tanques":0})
+        r=resumen.setdefault(x["producto"], {"producto": x["producto"], "producto_nombre": x["producto_nombre"], "color_hex": x["producto_color"], "total_litros15":0.0, "num_tanques":0})
         r["total_litros15"]+=x["litros15"] or 0; r["num_tanques"]+=1
-    for r in res.values(): r["porcentaje"]=round((r["total_litros15"]/total)*100,1)
-    return {"ok": True, "almacen": almacen_sel, "almacenes": almacenes, "tanques": tanques_out, "resumen_productos": sorted(res.values(), key=lambda x: -x["total_litros15"])}
+    for r in resumen.values(): r["porcentaje"]=round((r["total_litros15"]/total)*100,1)
+    out={"ok": True, "almacen": canon, "almacenes": almacenes, "tanques": tanques_out, "resumen_productos": sorted(resumen.values(), key=lambda x: -x["total_litros15"])}
+    if debug:
+        out["debug_filtered"]=[{"almacen_key":k[0],"tanque":k[1],"motivo":v} for k,v in reasons.items()]
+    return out
 
 @app.route("/")
 def home(): return render_template("sondastanques_mod.html")
@@ -142,14 +174,24 @@ def home(): return render_template("sondastanques_mod.html")
 @app.route("/api/almacenes")
 def api_almacenes():
     base=get_dbf_base()
-    if request.args.get("all")=="1":
-        return jsonify({"ok": True, "almacenes": load_almacenes_all(base)})
-    return jsonify({"ok": True, "almacenes": filter_almacenes_with_data(base)})
+    n=int(request.args.get("n","5"))
+    return jsonify({"ok": True, "almacenes": filter_almacenes_with_data(base, n=n)})
 
 @app.route("/api/tanques_norm")
 def api_tanques_norm():
     base=get_dbf_base()
-    return jsonify(build_response(base, request.args.get("almacen")))
+    n=int(request.args.get("n","5")); dbg=(request.args.get("debug")=="1")
+    return jsonify(build_response(base, request.args.get("almacen"), n=n, debug=dbg))
+
+@app.route("/api/diag/validez")
+def api_diag():
+    base=get_dbf_base()
+    n=int(request.args.get("n","5"))
+    tqs=load_tanques(base); cal=load_calados(base); latest, reasons=latest_by_rule(cal, n=n)
+    ok=len(latest); fail=len(reasons)
+    examples=list(reasons.items())[:50]
+    data=[{"almacen_key":k[0],"tanque":k[1],"motivo":v} for k,v in examples]
+    return jsonify({"ok": True, "latest_ok": ok, "latest_fail": fail, "sample_fail": data})
 
 @app.route("/api/ffcala/campos")
 def api_campos():
