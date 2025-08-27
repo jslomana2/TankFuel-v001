@@ -222,6 +222,8 @@
       liquid.style.setProperty("--fill", col);
       liquid.style.setProperty("--fillLight", colLight);
       var pct = (t.capacidad>0)? percent((t.volumen/t.capacidad)*100) : 0; liquid.style.height = pct+"%";
+      var __nivel = (pct>70)?"Alto":(pct>=21)?"Medio":"Bajo";
+      var __nivelColor = (pct>70)?"#16a34a":(pct>=21)?"#f59e0b":"#ef4444";
       var w1=document.createElement("div"); w1.className="wave";
       var w2=document.createElement("div"); w2.className="wave wave2";
       var w3=document.createElement("div"); w3.className="wave wave3";
