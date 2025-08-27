@@ -1,10 +1,8 @@
 
 # -*- coding: utf-8 -*-
-import os, sys, threading, webbrowser, logging
+import os, sys, threading, webbrowser, logging, re
 from datetime import datetime
-from typing import Dict, Any, List, Tuple, Optional
 from flask import Flask, jsonify, render_template, request, Response
-
 try:
     from dbfread import DBF
 except Exception:
@@ -23,10 +21,18 @@ def _read_dbf(path: str):
     return list(DBF(path, ignore_missing_memofile=True, recfactory=dict, char_decode_errors='ignore'))
 
 def _dt(fecha, hora):
+    # Acepta int/float/str ('94523', '094523', '9:45:23', '94523.0', etc.)
     try:
         if fecha is None or hora is None: return None
         y,m,d = fecha.year, fecha.month, fecha.day
-        s=str(hora).strip().zfill(6); h=int(s[0:2]); mi=int(s[2:4]); se=int(s[4:6])
+        if isinstance(hora, (int, float)):
+            s = f"{int(round(float(hora))):06d}"
+        else:
+            s = re.sub(r"\D", "", str(hora).strip())
+            if not s: return None
+            if len(s) < 6: s = s.zfill(6)
+            elif len(s) > 6: s = s[-6:]
+        h = int(s[0:2]); mi = int(s[2:4]); se = int(s[4:6])
         return datetime(y,m,d,h,mi,se)
     except Exception:
         return None
@@ -53,25 +59,21 @@ def _last_non_null(values):
     return None
 
 def _norm_code(c: str) -> str:
-    # Normalize almacen code by stripping spaces and leading zeros (but keep '0' as '0')
     s = ("" if c is None else str(c)).strip()
     if s == "": return s
     s2 = s.lstrip("0")
     return s if s2=="" else s2
 
-# FFALMA
 def load_almacenes_all(base: str):
     rows = _read_dbf(os.path.join(base, "FFALMA.DBF"))
     out = [{"codigo": str(r.get("CODIGO")), "nombre": str(r.get("POBLACION") or ""), "key": _norm_code(r.get("CODIGO"))} for r in rows]
     out.sort(key=lambda x: x["codigo"] or "")
     return out
 
-# FFARTI
 def load_articulos(base: str):
     rows = _read_dbf(os.path.join(base, "FFARTI.DBF"))
     return {str(r.get("CODIGO")): {"codigo": str(r.get("CODIGO")), "nombre": str(r.get("DESCRI") or ""), "color": _hex(r.get("COLORPRODU")) or "#2E8B57"} for r in rows}
 
-# FFTANQ
 def load_tanques(base: str):
     rows = _read_dbf(os.path.join(base, "FFTANQ.DBF"))
     out=[]
@@ -88,7 +90,6 @@ def load_tanques(base: str):
     out.sort(key=k)
     return out
 
-# FFCALA
 def load_calados(base: str):
     rows = _read_dbf(os.path.join(base, "FFCALA.DBF"))
     out=[]
@@ -115,7 +116,7 @@ def latest_by_rule(calados, n=5):
         l15=_last_non_null([r["litros15"] for r in rows])
         t=_last_non_null([r["temperatura"] for r in rows])
         if v is None or l15 is None or t is None:
-            reasons[k]=f"faltan datos en últimas {len(rows)} (volumen={v}, l15={l15}, temp={t})"
+            reasons[k]=f"faltan datos (volumen={v}, l15={l15}, temp={t})"
             continue
         latest[k]={"volumen": v, "litros15": l15, "temperatura": t}
     return latest, reasons
@@ -131,28 +132,23 @@ def filter_almacenes_with_data(base, n=5):
     canon_codes = [key_to_canon.get(k) for k in sorted(valid) if key_to_canon.get(k)]
     return [{"codigo": c, "nombre": name_by_canon.get(c, "")} for c in canon_codes]
 
-def build_response(base, almacen_param: Optional[str], n=5, debug=False):
+def build_response(base, almacen_param: str, n=5, debug=False):
     alma = load_almacenes_all(base)
     key_to_canon = {a["key"]: a["codigo"] for a in alma}
-    canon_to_name = {a["codigo"]: a["nombre"] for a in alma}
     almacenes = filter_almacenes_with_data(base, n=n)
     if not almacenes:
         return {"ok": True, "almacenes": [], "tanques": [], "resumen_productos": [], "debug": {"reason":"Sin tanques válidos"}}
-    # normalize seleccion
     sel_key = _norm_code(almacen_param) if almacen_param else _norm_code(almacenes[0]["codigo"])
     canon = key_to_canon.get(sel_key, almacenes[0]["codigo"])
     tqs = load_tanques(base)
     cal = load_calados(base)
-    latest, reasons = latest_by_rule(cal, n=n)
-    # Artículos
+    latest, _ = latest_by_rule(cal, n=n)
     art = load_articulos(base)
-
     tanques_out=[]
     for t in tqs:
         if t["almacen_key"] != _norm_code(canon): continue
         k=(t["almacen_key"], t["tanque"]); c=latest.get(k)
-        if not c:
-            continue
+        if not c: continue
         a=art.get(t["articulo"], {"nombre": None, "color": None})
         tanques_out.append({"almacen": canon, "tanque": t["tanque"], "tanque_nombre": t["nombre"],
                             "producto": t["articulo"], "producto_nombre": a["nombre"], "producto_color": a["color"],
@@ -164,8 +160,7 @@ def build_response(base, almacen_param: Optional[str], n=5, debug=False):
         r["total_litros15"]+=x["litros15"] or 0; r["num_tanques"]+=1
     for r in resumen.values(): r["porcentaje"]=round((r["total_litros15"]/total)*100,1)
     out={"ok": True, "almacen": canon, "almacenes": almacenes, "tanques": tanques_out, "resumen_productos": sorted(resumen.values(), key=lambda x: -x["total_litros15"])}
-    if debug:
-        out["debug_filtered"]=[{"almacen_key":k[0],"tanque":k[1],"motivo":v} for k,v in reasons.items()]
+    if debug: out["debug_counts"]={"calados": len(cal), "tanques": len(tqs), "latest": len(latest)}
     return out
 
 @app.route("/")
@@ -191,7 +186,7 @@ def api_diag():
     ok=len(latest); fail=len(reasons)
     examples=list(reasons.items())[:50]
     data=[{"almacen_key":k[0],"tanque":k[1],"motivo":v} for k,v in examples]
-    return jsonify({"ok": True, "latest_ok": ok, "latest_fail": fail, "sample_fail": data})
+    return jsonify({"ok": True, "rows_calados": len(cal), "rows_tanques": len(tqs), "latest_ok": ok, "latest_fail": fail, "sample_fail": data})
 
 @app.route("/api/ffcala/campos")
 def api_campos():
