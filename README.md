@@ -1,47 +1,35 @@
-# PROCONSI · Tanques (Vista avanzada)
+# PROCONSI – Tanques (Vista avanzada) — Estado por porcentaje
 
-Aplicación local (Flask + PyInstaller) que lee **DBF** (FFALMA, FFARTI, FFTANQ, FFCALA) y muestra:
-- Tarjetas de tanques por almacén
-- Color del producto desde **FFARTI.COLORPRODU** (fiel a especificación)
-- Barra de nivel con estados (Normal/Atención/Alarma)
-- Selector de almacén y botón **Refrescar**
-- Panel histórico al hacer clic en un tanque
+Este paquete parte del **ZIP funcional** que nos enviaste y añade una mejora:
+el **estado junto al nombre del tanque** (círculo + texto) ahora se calcula por **porcentaje de llenado**:
 
-## Estructura
-```
-dbf_exe_project/
-  ├─ app.py
-  ├─ requirements.txt
-  ├─ templates/sondastanques_mod.html
-  └─ static/
-      ├─ sondastanques_mod.css
-      ├─ sondastanques_mod.js
-      └─ favicon.ico
-.github/workflows/build-windows-exe.yml
-```
+- **Alto** (círculo verde) cuando **> 70%**
+- **Medio** (círculo amarillo) cuando **21% – 69%**
+- **Bajo** (círculo rojo) cuando **≤ 20%**
 
-## Ejecución en desarrollo
-```bash
-cd dbf_exe_project
-pip install -r requirements.txt
-set FLASK_ENV=development
-python app.py
-# Abre http://127.0.0.1:5000/
-```
-> Coloca **FFALMA.DBF**, **FFARTI.DBF**, **FFTANQ.DBF**, **FFCALA.DBF** en la misma carpeta que `app.py` (o usa `DBF_DIR` para apuntar a otra ruta).
+## Qué he modificado
 
-## Variables
-- `DBF_DIR` (opcional): carpeta donde están los DBF. Por defecto, la misma que el EXE/app.
-- `FFALMA`, `FFARTI`, `FFTANQ`, `FFCALA`: nombres de los ficheros. Por defecto `*.DBF`.
+1. `sondastanques_mod.js`  
+   - Eliminado el uso de `t.status` para el chip del estado visual.
+   - Añadida lógica local: calcula el % (si no existe `pct`), decide el nivel y aplica **color** y **texto** dinámicos.
+2. `sondastanques_mod.html`  
+   - Leyenda del pie actualizada a **Alto / Medio / Bajo**.
+   - Añadido **cache-busting** al script: `sondastanques_mod.js?v=20250827-4` para forzar recarga del navegador.
 
-## Build EXE (local)
-```bash
-pip install pyinstaller
-pyinstaller --noconfirm --onefile --add-data "templates;templates" --add-data "static;static" app.py
-# El EXE sale en dist/app.exe (renómbralo si quieres).
-```
+> ⚠️ No se han tocado ni estructura ni estilos fuera de lo anterior. El resto del proyecto queda **tal cual**.
 
-## GitHub Actions
-El workflow `build-windows-exe.yml` compila en Windows y adjunta el artefacto `PROCONSI-Tanques.exe`.
-Coloca tus DBF **junto al EXE** al desplegarlo.
+## Cómo desplegar
 
+1. Copia los archivos de este ZIP **encima** de tu proyecto actual (respeta rutas/estructura).
+2. Abre la vista en el navegador y fuerza recarga: **Ctrl + F5** (o vacía caché).
+3. Comprueba en DevTools (F12 → Elements/Sources) que el `<script>` carga con `?v=20250827-4`.
+
+## Verificación rápida
+
+- Localiza una tarjeta con % alto/bajo y verifica que el **texto** y el **círculo** cambian entre **Alto / Medio / Bajo** según el %.
+- La leyenda del pie debe mostrar **Alto, Medio, Bajo, Agua**.
+
+## Notas
+
+- Si en el futuro quieres volver a usar estados ajenos al % (por ejemplo, alarmas de sensor), podemos combinar ambos
+  (p.ej., mostrar un **icono extra** o un **borde** de tarjeta) sin perder esta lectura por porcentaje.
