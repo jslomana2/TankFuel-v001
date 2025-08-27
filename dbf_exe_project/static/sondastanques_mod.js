@@ -154,8 +154,8 @@
   }
 
   function exportCsv(filename, rows){
-    var csv = "Fecha;Medido (L);Libro (L);Diferencia (L)\r\n";
-    (rows||[]).forEach(function(r){ var d=(r.medido||0)-(r.libro||0); csv += [r.fecha, r.medido||0, r.libro||0, d].join(";") + "\r\n"; });
+    var csv = "Fecha;Medido (L);Libro (L);Diferencia (L)\\r\\n";
+    (rows||[]).forEach(function(r){ var d=(r.medido||0)-(r.libro||0); csv += [r.fecha, r.medido||0, r.libro||0, d].join(";") + "\\r\\n"; });
     var blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
     if(window.navigator.msSaveOrOpenBlob){ window.navigator.msSaveOrOpenBlob(blob, filename); }
     else{ var a=document.createElement("a"); var url=URL.createObjectURL(blob); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 0); }
@@ -237,10 +237,24 @@
       var info = document.createElement("div");
       var r1 = document.createElement("div"); r1.style.display="flex"; r1.style.alignItems="center"; r1.style.justifyContent="space-between"; r1.style.margin="4px 0";
       var nm = document.createElement("div"); nm.className="name"; nm.textContent = (t.nombre||"TANQUE");
-      var st = document.createElement("div"); st.className="status";
-      var dt = document.createElement("span"); dt.className="dot"; dt.style.background=statusColor(t.status||"ok");
-      var stx = document.createElement("span"); stx.textContent = (t.status==="ok"?"Normal":(t.status==="warn"?"Atención":"Alarma"));
-      st.appendChild(dt); st.appendChild(stx);
+      
+// Estado según porcentaje
+var estado, color;
+if (pct > 70) {
+  estado = "Alto";
+  color = "#16a34a"; // verde
+} else if (pct >= 21) {
+  estado = "Medio";
+  color = "#f59e0b"; // amarillo
+} else {
+  estado = "Bajo";
+  color = "#ef4444"; // rojo
+}
+var st = document.createElement("div"); st.className="status";
+var dt = document.createElement("span"); dt.className="dot"; dt.style.background = color;
+var stx = document.createElement("span"); stx.textContent = estado;
+st.appendChild(dt); st.appendChild(stx);
+
       r1.appendChild(nm); r1.appendChild(st);
       info.appendChild(r1);
 
