@@ -7,8 +7,7 @@
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Tanques – Vista avanzada (MODERNO interno)</title>
 <link href="sondastanques_mod.css" rel="stylesheet"/>
-</meta>  <link rel="stylesheet" href="{{ url_for('static', filename='sondastanques_mod.css') }}">
-</head>
+</meta></head>
 <body>
 <div class="wrap">
 <header>
@@ -59,15 +58,15 @@
 </div>
 <footer>
 <div class="legend">
-<span class="chip"><span class="dot" style="background:var(--ok)"></span> Normal</span>
-<span class="chip"><span class="dot" style="background:var(--warn)"></span> Atención</span>
-<span class="chip"><span class="dot" style="background:var(--bad)"></span> Alarma</span>
+<span class="chip"><span class="dot" style="background:var(--ok)"></span> Alto</span>
+<span class="chip"><span class="dot" style="background:var(--warn)"></span> Medio</span>
+<span class="chip"><span class="dot" style="background:var(--bad)"></span> Bajo</span>
 <span class="chip"><span class="dot" style="background:var(--water)"></span> Agua</span>
 </div>
 <div id="footerInfo"></div>
 </footer>
 </div>
-
+<script src="sondastanques_mod.js"></script>
 
 <script>
 (function(){
@@ -151,57 +150,5 @@
   }
 })();
 </script>
-
-<script>window.__vfp_integration__=true;</script>
-<script src="{{ url_for('static', filename='sondastanques_mod.js') }}"></script>
-<script>
-(function(){
-  const cache = new Map();
-  async function j(u){const r=await fetch(u);return r.json();}
-  async function getAlmacenes(){
-    const a = await j('/api/almacenes?n=200');
-    return a.almacenes||[];
-  }
-  async function getTanques(cod){
-    if(cache.has(cod)) return cache.get(cod);
-    const d = await j('/api/tanques_norm?almacen='+encodeURIComponent(cod)+'&n=5');
-    const tanques = (d.tanques||[]).map(t=>({
-      almacen:t.almacen, nombre:t.tanque_nombre, producto:t.producto_nombre||t.producto,
-      color:t.producto_color, colorProducto:t.producto_color, colorRGB:t.producto_color,
-      capacidad:t.capacidad, volumen:t.volumen, temperatura:t.temperatura,
-      alturaAgua:0, status:'ok', spark:[]
-    }));
-    const store = { id: d.almacen||cod, nombre: (d.almacenes||[]).find(a=>a.codigo===cod)?.nombre ? (cod+' – '+(d.almacenes||[]).find(a=>a.codigo===cod).nombre) : cod, tanques };
-    cache.set(cod, store);
-    return store;
-  }
-  async function setAll(active){
-    const arr = Array.from(cache.values());
-    if(window.setData) window.setData({ almacenes: arr, activoId: active });
-  }
-  window.__sondasUI = {
-    async init(){
-      const alms = await getAlmacenes();
-      if(!alms.length){ if(window.setData) window.setData({ almacenes:[], activoId:null }); return; }
-      const first = alms[0].codigo;
-      const firstStore = await getTanques(first);
-      if(window.setData) window.setData({ almacenes:[firstStore], activoId:first });
-      // Pre-carga y ACTUALIZA la UI con todos los almacenes
-      (async ()=>{
-        for(const a of alms.slice(1)){
-          try{ await getTanques(a.codigo);}catch(e){}
-        }
-        await setAll(first);
-      })();
-    },
-    async change(cod){
-      if(!cache.has(cod)) await getTanques(cod);
-      await setAll(cod);
-    }
-  };
-  document.addEventListener('DOMContentLoaded', ()=>window.__sondasUI.init());
-})();
-</script>
-
 </body>
 </html>
