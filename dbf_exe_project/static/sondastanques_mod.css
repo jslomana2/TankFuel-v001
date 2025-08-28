@@ -1,10 +1,20 @@
 :root{
-  --text:#e7eef6; --muted:#a6b8c9; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --very:#86efac;
+  --bg:#0c1b29; --card:#0f2435; --text:#e7eef6; --muted:#a6b8c9;
+  --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --very:#86efac;
 }
-body{margin:0;background:#0c1b29;color:var(--text);font:16px/1.4 system-ui,Segoe UI,Roboto}
-.app-header{display:flex;align-items:center;gap:14px;justify-content:flex-start;background:#fff;color:#111;padding:10px 16px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;padding:16px}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,Segoe UI,Roboto}
+.app-header{display:flex;align-items:center;gap:12px;padding:10px 16px;background:#fff;color:#111}
+.app-header .brand{border:0;background:#0e1520;border-radius:8px;color:#fff;padding:6px 10px}
+.app-header .brand img{height:18px;display:block}
+.app-header h1{margin:0;font-size:28px;font-weight:800}
+.toolbar{margin-left:auto;display:flex;gap:8px}
+button, select{border:1px solid #2a3d52;background:#0e1520;color:#fff;border-radius:10px;padding:6px 10px}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px;padding:16px}
+
+/* Compatibilidad para tarjetas existentes */
+.card h3, .tank-card h3{display:flex;align-items:center;gap:10px}
 .status{display:inline-flex;align-items:center;gap:8px;margin-left:8px;font-weight:600}
 .status .dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--ok)}
-.card h3, .tank-card h3{display:flex;align-items:center;gap:10px}
 .badge{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.35);padding:2px 8px;border-radius:999px;font-size:12px}

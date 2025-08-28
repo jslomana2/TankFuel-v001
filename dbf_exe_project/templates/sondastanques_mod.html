@@ -4,21 +4,23 @@
   <meta charset="utf-8" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PROCONSI – SondaTanques</title>
+  <title>PROCONSI – Panel de Tanques</title>
   <link rel="icon" href="{{ url_for('static', filename='proconsi.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='sondastanques_mod.css') }}">
 </head>
 <body>
   <header class="app-header">
-    <img src="{{ url_for('static', filename='proconsi.svg') }}" alt="Proconsi" height="28">
+    <button class="brand"><img src="{{ url_for('static', filename='proconsi.svg') }}" alt="Proconsi"></button>
     <h1>Panel de Tanques</h1>
     <div class="toolbar">
-      <button id="btn-refresh" title="Refrescar">Refrescar</button>
+      <button id="btn-refresh">Refrescar</button>
       <select id="sel-almacen"></select>
     </div>
   </header>
 
-  <main id="grid-tanques" class="grid"></main>
+  <main id="grid-tanques" class="grid">
+    <!-- Tu backend pinta aquí. El JS aplicará el texto del estado. -->
+  </main>
 
   <script src="{{ url_for('static', filename='sondastanques_mod.js') }}"></script>
 </body>
