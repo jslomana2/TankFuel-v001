@@ -205,91 +205,9 @@
     });
   }
 
-  
-function renderOneAlmacen(a){
-  var total=0, cap=0, alarms=0; 
-  var frag = document.createDocumentFragment();
-  var grid = document.createElement("div"); grid.className="grid";
-  (a.tanques||[]).forEach(function(t){
-    total += t.volumen||0; cap += t.capacidad||0; if(t.status==="bad") alarms++;
-    var col = colorFrom(t.color || t.colorProducto || t.colorRGB);
-    var colLight = shade(col, +0.24);
-    var card = document.createElement("div"); card.className="card";
-    var tankWrap = document.createElement("div"); tankWrap.className="tankWrap";
-    var tank = document.createElement("div"); tank.className="tank";
-    var liquid = document.createElement("div"); liquid.className="liquid";
-    liquid.style.setProperty("--fill", col);
-    liquid.style.setProperty("--fillLight", colLight);
-    var pct = (t.capacidad>0)? percent((t.volumen/t.capacidad)*100) : 0; liquid.style.height = pct+"%";
-    var __nivel = (pct > 60) ? "Alto" : ((pct >= 21) ? "Medio" : "Bajo");
-    var __nivelColor = (pct > 60) ? "#16a34a" : ((pct >= 21) ? "#f59e0b" : "#ef4444");
-    var w1=document.createElement("div"); w1.className="wave";
-    var w2=document.createElement("div"); w2.className="wave wave2";
-    var w3=document.createElement("div"); w3.className="wave wave3";
-    liquid.appendChild(w1); liquid.appendChild(w2); liquid.appendChild(w3);
-    var gloss=document.createElement("div"); gloss.className="gloss"; tank.appendChild(gloss);
-    var stripe=document.createElement("div"); stripe.className="stripe"; tank.appendChild(stripe);
-    if(t.alturaAgua>0){ var water=document.createElement("div"); water.className="water"; tank.appendChild(water); }
-    tank.appendChild(liquid);
-    makeScale(tankWrap);
-    tankWrap.appendChild(tank);
-    var pctLabel=document.createElement("div"); pctLabel.className="pct"; pctLabel.textContent = percentFmt(pct); tankWrap.appendChild(pctLabel);
-    var info = document.createElement("div");
-    var r1 = document.createElement("div"); r1.style.display="flex"; r1.style.alignItems="center"; r1.style.justifyContent="space-between"; r1.style.margin="4px 0";
-    var nm = document.createElement("div"); nm.className="name"; nm.textContent = (t.nombre||"TANQUE");
-    var st = document.createElement("div"); st.className="status";
-    var dt = document.createElement("span"); dt.className="dot"; dt.style.background=__nivelColor;
-    var stx = document.createElement("span"); stx.textContent = __nivel;
-    st.appendChild(dt); st.appendChild(stx);
-    r1.appendChild(nm); r1.appendChild(st);
-    info.appendChild(r1);
-    var c = document.createElement("canvas"); c.className="spark"; info.appendChild(c);
-    var ullage = (t.capacidad||0) - (t.volumen||0);
-    var kv = document.createElement("div"); kv.className="kv";
-    kv.innerHTML = "<div>Volumen</div><div><strong>"+litersLabel(t.volumen||0)+"</strong></div>"
-                 + "<div>Capacidad</div><div>"+litersLabel(t.capacidad||0)+"</div>"
-                 + "<div>Disponible</div><div>"+litersLabel(ullage)+"</div>"
-                 + "<div>Producto</div><div>"+(t.producto||"-")+"</div>"
-                 + "<div>Temp.</div><div>"+(t.temperatura!=null? t.temperatura.toFixed(1)+' °C' : '-')+"</div>"
-                 + "<div>Agua</div><div>"+(t.alturaAgua!=null? t.alturaAgua.toFixed(1)+' mm' : '-')+"</div>";
-    info.appendChild(kv);
-    card.appendChild(tankWrap); card.appendChild(info); grid.appendChild(card);
-    setTimeout(function(){ drawSpark(c, t.spark||[], col); }, 0);
-    card.onclick = function(){
-      var cards = document.querySelectorAll(".card"); for(var i=0;i<cards.length;i++) cards[i].classList.remove("sel");
-      card.classList.add("sel"); renderHistory(t);
-    };
-  });
-  // encabezado de sección
-  var section = document.createElement("section"); section.className = "almacenSection";
-  var h = document.createElement("h2"); h.className="almacenTitle";
-  h.textContent = (a.id||"") + " – " + (a.nombre||"Almacén");
-  section.appendChild(h);
-  section.appendChild(grid);
-  // totales del almacen
-  var tot = document.createElement("div"); tot.className="almacenTotals";
-  // Reutilizamos renderTotals para crear chips; aquí lo clonamos en este contenedor
-  var tmp = document.createElement("div"); tmp.id="__tmp_totales"; document.body.appendChild(tmp);
-  var old = document.getElementById("totales"); var bak = old.innerHTML;
-  document.getElementById("totales").innerHTML=""; renderTotals(a); tmp.innerHTML = document.getElementById("totales").innerHTML; document.getElementById("totales").innerHTML = bak;
-  // mover chips a 'tot'
-  Array.from(tmp.childNodes).forEach(function(n){ tot.appendChild(n.cloneNode(true)); });
-  tmp.remove();
-  section.appendChild(tot);
-  // resumen superior para el activo lo dejamos a cargo del caller
-  return section;
-}
-function render(){
+  function render(){
     if(!almacenes.length){ document.getElementById("grid").innerHTML = ""; renderTotals(null); document.getElementById("histPanel").hidden=true; return; }
-    renderSelect();
-    var gridHost = document.getElementById("grid"); gridHost.innerHTML="";
-    if(window.__showAllMode){
-      almacenes.forEach(function(a){ gridHost.appendChild( renderOneAlmacen(a) ); });
-      document.getElementById("summary").textContent = "Todos los almacenes";
-      document.getElementById("footerInfo").textContent = "Almacenes: "+almacenes.length+" • Activo: todos";
-      return;
-    }
-    var a = almacenes[idxActivo];
+    var a = almacenes[idxActivo]; renderSelect();
     var total=0, cap=0, alarms=0; var grid = document.getElementById("grid"); grid.innerHTML = "";
 
     (a.tanques||[]).forEach(function(t){
@@ -321,8 +239,8 @@ function render(){
       var nm = document.createElement("div"); nm.className="name"; nm.textContent = (t.nombre||"TANQUE");
       // Estado por porcentaje (Alto/Medio/Bajo)
 var __p = (typeof pct === "number") ? pct : ((t.capacidad>0)? Math.max(0, Math.min(100, (t.volumen/t.capacidad)*100)) : 0);
-var __nivel = (pct > 60) ? "Alto" : ((pct >= 21) ? "Medio" : "Bajo");
-var __nivelColor = (pct > 60) ? "#16a34a" : ((pct >= 21) ? "#f59e0b" : "#ef4444");
+var __nivel = (__p > 70) ? "Alto" : ((__p >= 21) ? "Medio" : "Bajo");
+var __nivelColor = (__p > 70) ? "#16a34a" : ((__p >= 21) ? "#f59e0b" : "#ef4444");
 var st = document.createElement("div"); st.className="status";
 var dt = document.createElement("span"); dt.className="dot"; dt.style.background = __nivelColor;
 var stx = document.createElement("span"); stx.textContent = __nivel;
