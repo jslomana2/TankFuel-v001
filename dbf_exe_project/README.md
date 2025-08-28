@@ -1,9 +1,18 @@
-# PROCONSI – SondaTanques (Flask + DBF)
 
-**Reglas**:
-- volumen = última no nula de FFCALA.LITROS (dentro de las últimas 5).
-- litros15 = última no nula de FFCALA.LITROS15 (dentro de las últimas 5).
-- temperatura = última no nula de FFCALA.TEMPERA (dentro de las últimas 5).
-- Si no hay lecturas válidas, **NO se muestra el tanque** (sin fallback a FFTANQ).
+# PROCONSI – SondaTanques (HEADER_WHITE baseline)
 
-Coloca FFCALA.DBF, FFTANQ.DBF, FFALMA.DBF, FFARTI.DBF junto a app.py (o junto al EXE).
+Estructura:
+```
+dbf_exe_project/
+  app.py
+  requirements.txt
+  templates/sondastanques_mod.html
+  static/sondastanques_mod.css
+  static/sondastanques_mod.js
+  .github/workflows/build-windows-exe.yml
+```
+
+Notas:
+- El **texto del estado** ahora cambia con el % junto al **icono/bola** (<=20% ⚠ "Bajo", 21-50 "Medio", 51-90 "Alto", 91-100 "Muy alto").
+- Los endpoints están stub: con tu backend real seguirán funcionando. El HTML/JS es la parte corregida.
+- Si compilas en GitHub Actions, coloca los DBF junto al EXE fuera del repo como haces normalmente.
