@@ -12,7 +12,7 @@ function upsertCard(a,t,grid){
   var key=keyForTank(a,t); var ref=__STATE.cardsByKey.get(key);
   var col=colorFrom(t.color||t.colorProducto||t.colorRGB); var colLight=shade(col,+0.24);
   var pct=(t.capacidad>0)? percent((t.volumen/t.capacidad)*100):0;
-  var nivel=(pct>60)?"Alto":((pct>=21)?"Medio":"Bajo"); var colorNivel=(pct>60)?"#16a34a":((pct>=21)?"#f59e0b":"#ef4444");
+  var nivel = (pct >= 91) ? "Lleno" : ((pct >= 51) ? "Alto" : ((pct >= 21) ? "Medio" : "Bajo")); var colorNivel = (pct >= 91) ? "#4ade80" : ((pct >= 51) ? "#16a34a" : ((pct >= 21) ? "#f59e0b" : "#ef4444"));
   if(!ref){
     var card=document.createElement("div"); card.className="card";
     var tankWrap=document.createElement("div"); tankWrap.className="tankWrap";
