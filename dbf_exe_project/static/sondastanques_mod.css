@@ -102,3 +102,5 @@
 .pct{ will-change: contents; }
 .status .dot{ will-change: background; }
 .card{ contain: content; }
+
+  .dot.warn{width:auto;height:auto;border-radius:0;font-weight:600}

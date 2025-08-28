@@ -42,7 +42,14 @@ function upsertCard(a,t,grid){
   if(ref.last.color!==col){ p.liquid.style.setProperty("--fill",col); p.liquid.style.setProperty("--fillLight",colLight); ref.last.color=col; }
   if(ref.last.pct!==pct){ p.liquid.style.height=pct+"%"; p.pctLabel.textContent=percentFmt(pct); ref.last.pct=pct; }
   var nombre=(t.nombre||"TANQUE"); if(ref.last.nombre!==nombre){ p.nm.textContent=nombre; ref.last.nombre=nombre; }
-  if(ref.last.nivel!==nivel){ p.dt.style.background=colorNivel; p.stx.textContent=nivel; ref.last.nivel=nivel; }
+  if(ref.last.nivel!==nivel){
+    if(nivel==="Bajo"){
+      p.dt.className="dot warn"; p.dt.textContent="⚠"; p.dt.style.background="transparent"; p.dt.style.color="#ef4444";
+    }else{
+      p.dt.className="dot"; p.dt.textContent=""; p.dt.style.background=colorNivel; p.dt.style.color="";
+    }
+    p.stx.textContent=nivel; ref.last.nivel=nivel; }
+
   if(ref.last.volumen!==(t.volumen||0) || ref.last.capacidad!==(t.capacidad||0)){
     var ullage=(t.capacidad||0)-(t.volumen||0);
     p.kv.innerHTML="<div>Volumen</div><div><strong>"+litersLabel(t.volumen||0)+"</strong></div>"
@@ -304,8 +311,14 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
       var r1 = document.createElement("div"); r1.style.display="flex"; r1.style.alignItems="center"; r1.style.justifyContent="space-between"; r1.style.margin="4px 0";
       var nm = document.createElement("div"); nm.className="name"; nm.textContent = (t.nombre||"TANQUE");
       var st = document.createElement("div"); st.className="status";
-      var dt = document.createElement("span"); dt.className="dot"; dt.style.background = nivelColorFromPct(pct);
-      var stx = document.createElement("span"); stx.textContent = (t.status==="ok"?"Normal":(t.status==="warn"?"Atención":"Alarma"));
+      var dt = document.createElement("span");
+      var stx = document.createElement("span");
+      if(pct<=20){
+        dt.className="dot warn"; dt.textContent="⚠"; dt.style.background="transparent"; dt.style.color="#ef4444";
+      }else{
+        dt.className="dot"; dt.style.background = nivelColorFromPct(pct);
+      }
+      stx.textContent = nivel;
       st.appendChild(dt); st.appendChild(stx);
       r1.appendChild(nm); r1.appendChild(st);
       info.appendChild(r1);
