@@ -3,7 +3,64 @@
   var selectedTank = null; var filteredRows = [];
 
   function toHex(n){ return ("0"+n.toString(16)).slice(-2); }
-  function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number"){ var r=(v&255),g=(v>>8)&255,b=(v>>16)&255; return "#"+toHex(r)+toHex(g)+toHex(b);} return "#1987ff"; }
+  
+// ---- Ultra-rápido: capa de diff y refresco ----
+var __STATE = { lastKey:null, cardsByKey:new Map(), sectionByAlm:new Map(), pendingFrame:0, lastRenderAt:0, refreshing:false };
+function hashKey(obj){ try{ var s=JSON.stringify(obj,function(k,v){ if(v&&typeof v==='object'){ if('spark'in v){ var c=Object.assign({},v); delete c.spark; return c; } } return v;}); var h=5381; for(var i=0;i<s.length;i++) h=((h<<5)+h)+s.charCodeAt(i); return (h>>>0).toString(16);}catch(_){return String(Math.random());} }
+function keyForTank(a,t){ return (a.id!=null?a.id:a.nombre||'A') + '|' + (t.id_tanque||t.codigo||t.nombre||Math.random()); }
+function upsertCard(a,t,grid){
+  var key=keyForTank(a,t); var ref=__STATE.cardsByKey.get(key);
+  var col=colorFrom(t.color||t.colorProducto||t.colorRGB); var colLight=shade(col,+0.24);
+  var pct=(t.capacidad>0)? percent((t.volumen/t.capacidad)*100):0;
+  var nivel=(pct>60)?"Alto":((pct>=21)?"Medio":"Bajo"); var colorNivel=(pct>60)?"#16a34a":((pct>=21)?"#f59e0b":"#ef4444");
+  if(!ref){
+    var card=document.createElement("div"); card.className="card";
+    var tankWrap=document.createElement("div"); tankWrap.className="tankWrap";
+    var tank=document.createElement("div"); tank.className="tank";
+    var liquid=document.createElement("div"); liquid.className="liquid";
+    liquid.style.setProperty("--fill",col); liquid.style.setProperty("--fillLight",colLight);
+    var w1=document.createElement("div"); w1.className="wave"; var w2=document.createElement("div"); w2.className="wave wave2"; var w3=document.createElement("div"); w3.className="wave wave3";
+    liquid.appendChild(w1); liquid.appendChild(w2); liquid.appendChild(w3);
+    var gloss=document.createElement("div"); gloss.className="gloss"; tank.appendChild(gloss);
+    var stripe=document.createElement("div"); stripe.className="stripe"; tank.appendChild(stripe);
+    if(t.alturaAgua>0){ var water=document.createElement("div"); water.className="water"; tank.appendChild(water); }
+    tank.appendChild(liquid); makeScale(tankWrap); tankWrap.appendChild(tank);
+    var pctLabel=document.createElement("div"); pctLabel.className="pct"; tankWrap.appendChild(pctLabel);
+    var info=document.createElement("div");
+    var r1=document.createElement("div"); r1.style.display="flex"; r1.style.alignItems="center"; r1.style.justifyContent="space-between"; r1.style.margin="4px 0";
+    var nm=document.createElement("div"); nm.className="name";
+    var st=document.createElement("div"); st.className="status"; var dt=document.createElement("span"); dt.className="dot"; var stx=document.createElement("span"); st.appendChild(dt); st.appendChild(stx);
+    r1.appendChild(nm); r1.appendChild(st); info.appendChild(r1);
+    var c=document.createElement("canvas"); c.className="spark"; info.appendChild(c);
+    var kv=document.createElement("div"); kv.className="kv"; info.appendChild(kv);
+    card.appendChild(tankWrap); card.appendChild(info); grid.appendChild(card);
+    card.onclick=function(){ var cards=document.querySelectorAll(".card"); for(var i=0;i<cards.length;i++) cards[i].classList.remove("sel"); card.classList.add("sel"); renderHistory(t); };
+    ref={el:card, parts:{liquid,pctLabel,nm,dt,stx,kv,spark:c,water:null}, last:{pct:-1,volumen:-1,capacidad:-1,nombre:null,nivel:null,color:null}};
+    __STATE.cardsByKey.set(key, ref);
+  }
+  var p=ref.parts;
+  if(ref.last.color!==col){ p.liquid.style.setProperty("--fill",col); p.liquid.style.setProperty("--fillLight",colLight); ref.last.color=col; }
+  if(ref.last.pct!==pct){ p.liquid.style.height=pct+"%"; p.pctLabel.textContent=percentFmt(pct); ref.last.pct=pct; }
+  var nombre=(t.nombre||"TANQUE"); if(ref.last.nombre!==nombre){ p.nm.textContent=nombre; ref.last.nombre=nombre; }
+  if(ref.last.nivel!==nivel){ p.dt.style.background=colorNivel; p.stx.textContent=nivel; ref.last.nivel=nivel; }
+  if(ref.last.volumen!==(t.volumen||0) || ref.last.capacidad!==(t.capacidad||0)){
+    var ullage=(t.capacidad||0)-(t.volumen||0);
+    p.kv.innerHTML="<div>Volumen</div><div><strong>"+litersLabel(t.volumen||0)+"</strong></div>"
+                  +"<div>Capacidad</div><div>"+litersLabel(t.capacidad||0)+"</div>"
+                  +"<div>Disponible</div><div>"+litersLabel(ullage)+"</div>"
+                  +"<div>Producto</div><div>"+(t.producto||"-")+"</div>"
+                  +"<div>Temp.</div><div>"+(t.temperatura!=null?t.temperatura.toFixed(1)+' °C':'-')+"</div>"
+                  +"<div>Agua</div><div>"+(t.alturaAgua!=null?t.alturaAgua.toFixed(1)+' mm':'-')+"</div>";
+    ref.last.volumen=(t.volumen||0); ref.last.capacidad=(t.capacidad||0);
+  }
+  (window.requestIdleCallback?requestIdleCallback:setTimeout)(function(){ drawSpark(p.spark, t.spark||[], col); },0);
+  return ref.el;
+}
+function diffRenderAlmacen(a, host){ var grid=host.querySelector(':scope > .grid'); if(!grid){ grid=document.createElement('div'); grid.className='grid'; host.appendChild(grid);} var frag=document.createDocumentFragment(); (a.tanques||[]).forEach(function(t){ frag.appendChild(upsertCard(a,t,grid)); }); }
+function fastRenderAll(almacenes){ var gridHost=document.getElementById("grid"); gridHost.innerHTML=""; __STATE.sectionByAlm.clear(); almacenes.forEach(function(a){ var section=document.createElement('section'); section.className='almacenSection'; var h=document.createElement('h2'); h.className='almacenTitle'; h.textContent=((a.id!=null?a.id:"") + " – " + (a.nombre||"Almacén")).trim(); section.appendChild(h); gridHost.appendChild(section); __STATE.sectionByAlm.set(a.id||a.nombre||Math.random(), section); diffRenderAlmacen(a, section); }); }
+function fastRenderSingle(a){ var gridHost=document.getElementById("grid"); gridHost.innerHTML=""; var section=document.createElement('section'); section.className='almacenSection'; var h=document.createElement('h2'); h.className='almacenTitle'; h.textContent=((a.id!=null?a.id:"") + " – " + (a.nombre||"Almacén")).trim(); section.appendChild(h); gridHost.appendChild(section); diffRenderAlmacen(a, section); }
+
+function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number"){ var r=(v&255),g=(v>>8)&255,b=(v>>16)&255; return "#"+toHex(r)+toHex(g)+toHex(b);} return "#1987ff"; }
   function shade(hex, pct){ var m=/(?:#)?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(hex); if(!m) return hex; var r=parseInt(m[1],16),g=parseInt(m[2],16),b=parseInt(m[3],16); function adj(x){ return Math.max(0,Math.min(255,Math.round(x+pct*255))); } return "#"+toHex(adj(r))+toHex(adj(g))+toHex(adj(b)); }
   function statusColor(s){ return s==="ok"?"var(--ok)":(s==="warn"?"var(--warn)":"var(--bad)"); }
   function litersFmt(n){ return (Math.round(n||0)).toLocaleString(); }
@@ -207,7 +264,11 @@
 
   function render(){
     if(!almacenes.length){ document.getElementById("grid").innerHTML = ""; renderTotals(null); document.getElementById("histPanel").hidden=true; return; }
+    if(window.__showAllMode){ fastRenderAll(almacenes); document.getElementById("footerInfo").textContent = "Almacenes: "+almacenes.length+" • Activo: todos"; return; }
     var a = almacenes[idxActivo]; renderSelect();
+    var currentKey = hashKey(window.__showAllMode ? almacenes : almacenes[idxActivo]);
+    if(currentKey === __STATE.lastKey){ return; }
+    __STATE.lastKey = currentKey;
     var total=0, cap=0, alarms=0; var grid = document.getElementById("grid"); grid.innerHTML = "";
 
     (a.tanques||[]).forEach(function(t){
@@ -237,14 +298,10 @@
       var info = document.createElement("div");
       var r1 = document.createElement("div"); r1.style.display="flex"; r1.style.alignItems="center"; r1.style.justifyContent="space-between"; r1.style.margin="4px 0";
       var nm = document.createElement("div"); nm.className="name"; nm.textContent = (t.nombre||"TANQUE");
-      // Estado por porcentaje (Alto/Medio/Bajo)
-var __p = (typeof pct === "number") ? pct : ((t.capacidad>0)? Math.max(0, Math.min(100, (t.volumen/t.capacidad)*100)) : 0);
-var __nivel = (__p > 70) ? "Alto" : ((__p >= 21) ? "Medio" : "Bajo");
-var __nivelColor = (__p > 70) ? "#16a34a" : ((__p >= 21) ? "#f59e0b" : "#ef4444");
-var st = document.createElement("div"); st.className="status";
-var dt = document.createElement("span"); dt.className="dot"; dt.style.background = __nivelColor;
-var stx = document.createElement("span"); stx.textContent = __nivel;
-st.appendChild(dt); st.appendChild(stx);
+      var st = document.createElement("div"); st.className="status";
+      var dt = document.createElement("span"); dt.className="dot"; dt.style.background=statusColor(t.status||"ok");
+      var stx = document.createElement("span"); stx.textContent = (t.status==="ok"?"Normal":(t.status==="warn"?"Atención":"Alarma"));
+      st.appendChild(dt); st.appendChild(stx);
       r1.appendChild(nm); r1.appendChild(st);
       info.appendChild(r1);
 
