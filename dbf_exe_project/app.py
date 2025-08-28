@@ -8,7 +8,7 @@ from dbfread import DBF
 APP_TITLE = "PROCONSI – SondaTanques (HEADER_WHITE)"
 ENCODING = "latin-1"
 
-app = Flask(__name__, static_url_path='', static_folder='static', template_folder='templates')
+app = Flask(__name__, static_url_path='/static', static_folder='static', template_folder='templates')
 
 def dbf_path(name):
     # DBFs are expected alongside the EXE, but in dev they're next to app.py
