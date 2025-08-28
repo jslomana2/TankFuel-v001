@@ -60,7 +60,26 @@ def status_from_pct(p):
         return {"key":"high", "label":"Alto", "shape":"circle", "color":"#2e7d32"}  # green
     return {"key":"full", "label":"Muy lleno", "shape":"circle", "color":"#66bb6a"} # light green
 
+
+def product_color(art_row, code):
+    # Try color from DBF field (if any)
+    if art_row:
+        for k in ("COLORPRODU","COLOR","HEXCOLOR","COLHEX"):
+            v = art_row.get(k)
+            if isinstance(v,str) and len(v)>=4 and v.strip().startswith("#"):
+                return v.strip()
+    c = (code or "").strip().upper()
+    # Fallback mapping by product keywords
+    if "AD-BLUE" in c or "ADBLUE" in c or "UREA" in c: return "#1e88e5"   # blue
+    if "GASOLEO A" in c or c.endswith("0001"): return "#2e7d32"          # green
+    if "GASOLEO B" in c or c.endswith("0002"): return "#3949ab"          # indigo
+    if "GASOLEO C" in c or c.endswith("0003"): return "#fb8c00"          # orange
+    if "GASOLINA" in c or "SP95" in c or "95"==c[-2:]: return "#c2185b"  # magenta
+    if "DIESEL" in c: return "#6d4c41"                                   # brown
+    return "#4b5563"                                                     # gray
+
 def load_lookup():
+
     # FFALMA: almacenes
     almacenes = read_dbf('FFALMA.DBF')
     Alm = {str(a.get("ALMACEN")).strip(): a for a in almacenes if a.get("ALMACEN") is not None}
@@ -117,6 +136,7 @@ def normalize_tank_rows():
             "almacen_descr": safe(alm.get("DESCRI") or alm.get("NOMBRE")),
             "articulo": cod_art,
             "articulo_descr": safe(art.get("DESCRI") or art.get("NOMBRE")),
+            "producto_color": product_color(art, cod_art),
             "capacidad": cap,
             "cantidad": round(cantidad, 2),
             "porcentaje": por,

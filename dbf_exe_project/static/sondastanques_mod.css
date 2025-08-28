@@ -43,3 +43,12 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font:14px/1.
 .legend .full{color:var(--full)}
 
 a{color:inherit;text-decoration:none}
+
+
+/* FAST_STATUS4 tweaks */
+.cards{gap:16px}
+.card{border-radius:18px;padding:14px}
+.card .name{font-weight:800}
+.tankbar.fast{height:16px;background:#eef2f7}
+.tankbar.fast>.fill{transition:width .25s ease}
+.header-white .brand{letter-spacing:.2px}

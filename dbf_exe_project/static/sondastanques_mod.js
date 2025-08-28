@@ -22,14 +22,14 @@ function statusClassAndText(st){
 function cardHTML(row){
   const st = statusClassAndText(row.status);
   const pct = row.porcentaje || 0;
-  const fillStyle = `width:${pct}%;`;
+  const fillStyle = `width:${pct}%; background:${row.producto_color || "#4b5563"}`;
   return `
     <article class="card" data-tanque="${row.tanque_id}">
       <div class="row">
         <div class="name">Tanque ${row.tanque_id}</div>
         <div class="badge ${st.cls}" title="${pct}%">${st.html}</div>
       </div>
-      <div class="tankbar" data-color="${st.cls}"><div class="fill" style="${fillStyle}"></div></div>
+      <div class="tankbar fast" data-color="${st.cls}"><div class="fill" style="${fillStyle}"></div></div>
       <div class="meta">
         ${row.almacen} · ${row.almacen_descr} — ${row.articulo} · ${row.articulo_descr} · ${pct}% (${row.cantidad}/${row.capacidad})
       </div>
