@@ -102,3 +102,17 @@
 .pct{ will-change: contents; }
 .status .dot{ will-change: background; }
 .card{ contain: content; }
+
+/* Warning icon for Bajo (0-20%) */
+.status .warn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  font-size: 14px;
+  font-weight: 700;
+  color:#ef4444;
+  background: transparent;
+}
