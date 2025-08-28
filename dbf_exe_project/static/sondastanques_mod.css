@@ -118,3 +118,18 @@
   text-shadow:0 1px 0 rgba(0,0,0,.2);
   backdrop-filter: blur(0.5px);
 }
+
+
+/* Sections styling */
+#grid > .section, #grid > .almacen, #grid > .alm-section, #grid > .group, #grid > section{
+  margin: 12px 0 20px 0;
+  padding: 10px 6px 0 6px;
+  border-top:1px solid rgba(255,255,255,.06);
+}
+#grid .section-title, #grid .alm-title, #grid h3{
+  margin: 0 6px 8px 6px;
+  font-weight: 700;
+  color: #e7eef6;
+  font-size: 14px;
+  opacity:.9;
+}

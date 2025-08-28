@@ -359,7 +359,9 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
   document.getElementById("almacenSel").addEventListener("change", function(e){ window.setWarehouse(e.target.value); });
   document.getElementById("prevBtn").addEventListener("click", function(){ window.prevWarehouse(); });
   document.getElementById("nextBtn").addEventListener("click", function(){ window.nextWarehouse(); });
-  document.getElementById("refreshBtn").addEventListener("click", function(){ if(typeof window.vfpRefresh==='function') window.vfpRefresh(); else location.reload(); });
+  
+  document.getElementById("allToggle").addEventListener("change", function(e){ window.__showAllMode = !!e.target.checked; render(); });
+document.getElementById("refreshBtn").addEventListener("click", function(){ if(typeof window.vfpRefresh==='function') window.vfpRefresh(); else location.reload(); });
   document.getElementById("groupSel").addEventListener("change", applyFilterAndRender);
   document.getElementById("applyFilter").addEventListener("click", applyFilterAndRender);
   document.getElementById("quick7").addEventListener("click", function(){
