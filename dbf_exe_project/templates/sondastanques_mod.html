@@ -1,210 +1,44 @@
-<!DOCTYPE html>
 
+<!doctype html>
 <html lang="es">
 <head>
-<meta charset="utf-8"/>
-<meta content="IE=edge" http-equiv="X-UA-Compatible">
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Tanques – Vista avanzada (MODERNO interno)</title>
-<link href="sondastanques_mod.css" rel="stylesheet"/>
-</meta>  <link rel="stylesheet" href="{{ url_for('static', filename='sondastanques_mod.css') }}">
+<meta charset="utf-8" />
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{{ app_title }}</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/sondastanques_mod.css" />
 </head>
 <body>
-<div class="wrap">
-<header>
-<div class="h-inner">
-<a class="brand" href="https://www.proconsi.com" rel="noopener" target="_blank">
-<img alt="Proconsi" onerror="this.style.display='none'; this.parentNode.insertAdjacentHTML('beforeend','&lt;strong&gt;PROCONSI&lt;/strong&gt;')" src="https://cdn-ildmohp.nitrocdn.com/OlNFhHrAqkTDgXLhkVWXZfchjFGWnneH/assets/images/optimized/rev-7a6779b/proconsi.com/wp-content/uploads/Logotipo-completo-Proconsi-PNG-1.png"/>
-</a>
-<div class="title">Tanques · Vista avanzada</div>
-<div class="pill" id="summary">Cargando…</div>
-<div class="spacer"></div>
-<div class="ctrls">
-<button id="alarmsBtn" title="Ir a alarmas">🔔 Alarmas</button>
-<button id="refreshBtn" data-throttle="1" title="Refrescar">⟳ Refrescar</button>
-<button id="prevBtn" title="Almacén anterior">←</button>
-<select id="almacenSel"></select>
-<button id="nextBtn" title="Almacén siguiente">→</button>
-</div>
-</div><div class="h-sub"><label class="chk-all"><input id="allToggle" type="checkbox"/><span>Ver todos los almacenes</span></label></div>
-</header>
-<div class="grid" id="grid"></div>
-<div aria-label="Totales por producto" id="totales"></div>
-<div hidden="" id="histPanel">
-<div id="histHeader">
-<div class="title" id="histTitle">Histórico</div>
-<div class="pill" id="histInfo">—</div>
-<div id="histBtns">
-<select id="groupSel" title="Agrupar para el gráfico">
-<option value="hours">Horas</option>
-<option selected="" value="days">Días</option>
-</select>
-<button id="exportBtn" title="Exportar a Excel (CSV)">⬇ Excel</button>
-<button id="pdfBtn" title="Exportar a PDF">⬇ PDF</button>
-</div>
-</div>
-<div id="histFilters">
-<label>Desde <input id="fromDate" type="date"/></label>
-<label>Hasta <input id="toDate" type="date"/></label>
-<button id="applyFilter">Aplicar</button>
-<button id="quick7">Últimos 7 días</button>
-<button id="quick30">Últimos 30 días</button>
-<span class="pill" id="rowsCount">0 filas</span>
-</div>
-<canvas id="histChart"></canvas>
-<table class="hist" id="histTable">
-<thead><tr><th>Fecha</th><th>Medido (L)</th><th>Libro (L)</th><th>Dif. (L)</th></tr></thead>
-<tbody></tbody>
-</table>
-</div>
-<footer>
-<div class="legend">
-<span class="chip"><span class="dot" style="background:var(--ok)"></span> Normal</span>
-<span class="chip"><span class="dot" style="background:var(--warn)"></span> Atención</span>
-<span class="chip"><span class="dot" style="background:var(--bad)"></span> Alarma</span>
-<span class="chip"><span class="dot" style="background:var(--water)"></span> Agua</span>
-</div>
-<div id="footerInfo"></div>
-</footer>
-</div>
+  <header class="header-white">
+    <div class="brand">PROCONSI • SondaTanques</div>
+    <div class="controls">
+      <select id="selAlmacen"></select>
+      <button id="btnVerTodos" class="btn-dark">Ver todos</button>
+      <button id="btnRefrescar" class="btn-dark">Refrescar</button>
+    </div>
+  </header>
 
+  <main class="grid">
+    <section>
+      <div id="cards" class="cards"></div>
+    </section>
+    <aside class="aside">
+      <h3>Histórico</h3>
+      <div id="hist"></div>
+    </aside>
+  </main>
 
-<script>
-(function(){
-  // No invasivo: envolvemos window.setData para poder conmutar entre original y "todos"
-  var cb, lastRaw = null, setDataOrig = null;
-  function qs(id){ return document.getElementById(id); }
-  function setControlsEnabled(flag){
-    var sel = qs("almacenSel"), prev = qs("prevBtn"), next = qs("nextBtn");
-    if(sel) sel.disabled = !flag;
-    if(prev) prev.disabled = !flag;
-    if(next) next.disabled = !flag;
-  }
-  function flattenAll(raw){
-    try{
-      var tanks = [];
-      if(Array.isArray(raw)){
-        // Ya es array de tanques
-        tanks = raw.slice();
-      }else if(raw && Array.isArray(raw.almacenes)){
-        raw.almacenes.forEach(function(a){
-          (a.tanques||[]).forEach(function(t){ tanks.push(t); });
-        });
-      }else{
-        return raw;
-      }
-      // Forzamos mismo almacen para que se agrupen en uno solo
-      tanks = tanks.map(function(t){
-        try{
-          var c = Object.assign({}, t);
-          c.almacen = "TODOS";
-          c.almacenNombre = "TODOS";
-          return c;
-        }catch(_){ return t; }
-      });
-      return tanks;
-    }catch(_){ return raw; }
-  }
-  function applyMode(){
-    if(!setDataOrig || lastRaw==null) return;
-    var all = !!(cb && cb.checked);
-    if(all){
-      setControlsEnabled(false);
-      setDataOrig(flattenAll(lastRaw));
-    }else{
-      setControlsEnabled(true);
-      setDataOrig(lastRaw);
-    }
-  }
-  function hookSetDataSoon(){
-    var tries = 0;
-    var iv = setInterval(function(){
-      tries++;
-      if(typeof window.setData === "function"){
-        if(!setDataOrig){
-          setDataOrig = window.setData;
-          window.setData = function(input){
-            lastRaw = input;
-            // Llamamos según modo actual
-            applyMode();
-          };
-        }
-        clearInterval(iv);
-      }else if(tries>50){ // ~5s
-        clearInterval(iv);
-      }
-    }, 100);
-  }
-  function init(){
-    cb = qs("allToggle");
-    hookSetDataSoon();
-    if(cb){
-      // por defecto: desmarcado; deja controles habilitados
-      cb.checked = false;
-      cb.addEventListener("change", applyMode);
-    }
-  }
-  if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", init);
-  }else{
-    init();
-  }
-})();
-</script>
+  <footer class="footer">
+    <div class="legend">
+      <span class="lg warn">⚠ Bajo (0–20%)</span>
+      <span class="lg mid"><i class="dot"></i> Medio (21–50%)</span>
+      <span class="lg high"><i class="dot"></i> Alto (51–90%)</span>
+      <span class="lg full"><i class="dot"></i> Muy lleno (91–100%)</span>
+    </div>
+  </footer>
 
-<script>window.__vfp_integration__=true;</script>
-<script src="{{ url_for('static', filename='sondastanques_mod.js') }}"></script>
-<script>
-(function(){
-  const cache = new Map();
-  async function j(u){const r=await fetch(u);return r.json();}
-  async function getAlmacenes(){
-    const a = await j('/api/almacenes?n=200');
-    return a.almacenes||[];
-  }
-  async function getTanques(cod){
-    if(cache.has(cod)) return cache.get(cod);
-    const d = await j('/api/tanques_norm?almacen='+encodeURIComponent(cod)+'&n=5');
-    const tanques = (d.tanques||[]).map(t=>({
-      almacen:t.almacen, nombre:t.tanque_nombre, producto:t.producto_nombre||t.producto,
-      color:t.producto_color, colorProducto:t.producto_color, colorRGB:t.producto_color,
-      capacidad:t.capacidad, volumen:t.volumen, temperatura:t.temperatura,
-      alturaAgua:0, status:'ok', spark:[]
-    }));
-    const store = { id: d.almacen||cod, nombre: (d.almacenes||[]).find(a=>a.codigo===cod)?.nombre ? (cod+' – '+(d.almacenes||[]).find(a=>a.codigo===cod).nombre) : cod, tanques };
-    cache.set(cod, store);
-    return store;
-  }
-  async function setAll(active){
-    const arr = Array.from(cache.values());
-    if(window.setData) window.setData({ almacenes: arr, activoId: active });
-  }
-  window.__sondasUI = {
-    async init(){
-      const alms = await getAlmacenes();
-      if(!alms.length){ if(window.setData) window.setData({ almacenes:[], activoId:null }); return; }
-      const first = alms[0].codigo;
-      const firstStore = await getTanques(first);
-      if(window.setData) window.setData({ almacenes:[firstStore], activoId:first });
-      // Pre-carga y ACTUALIZA la UI con todos los almacenes
-      (async ()=>{
-        for(const a of alms.slice(1)){
-          try{ await getTanques(a.codigo);}catch(e){}
-        }
-        await setAll(first);
-      })();
-    },
-    async change(cod){
-      if(!cache.has(cod)) await getTanques(cod);
-      await setAll(cod);
-    }
-  };
-  document.addEventListener('DOMContentLoaded', ()=>window.__sondasUI.init());
-})();
-</script>
-
-
-<script>(function(){var btn=document.getElementById('refreshBtn');if(!btn)return;var cooling=false;btn.addEventListener('click',function(e){if(cooling){e.stopImmediatePropagation();e.preventDefault();return;}cooling=true;setTimeout(function(){cooling=false;},600);},true);})();</script>
-
+<script src="/static/sondastanques_mod.js"></script>
 </body>
 </html>
