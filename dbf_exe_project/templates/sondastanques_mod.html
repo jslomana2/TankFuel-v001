@@ -105,26 +105,13 @@
       return tanks;
     }catch(_){ return raw; }
   }
-  
-function applyMode(){
-  try{
-    var on = !!(cb && cb.checked);
-    setControlsEnabled(!on);
-    window.__showAllMode = on;
-    if(on){
-      if(window.__sondasUI && typeof window.__sondasUI.setAll==="function"){
-        var sel = qs("almacenSel"); var active = sel ? sel.value : null;
-        window.__sondasUI.setAll(active);
-      }
+  function applyMode(){
+    if(!setDataOrig || lastRaw==null) return;
+    var all = !!(cb && cb.checked);
+    if(all){
+      setControlsEnabled(false);
+      setDataOrig(flattenAll(lastRaw));
     }else{
-      var sel = qs("almacenSel");
-      if(sel && window.__sondasUI && typeof window.__sondasUI.change==="function"){
-        window.__sondasUI.change(sel.value);
-      }
-    }
-  }catch(_){}
-}
-else{
       setControlsEnabled(true);
       setDataOrig(lastRaw);
     }
@@ -153,7 +140,7 @@ else{
     hookSetDataSoon();
     if(cb){
       // por defecto: desmarcado; deja controles habilitados
-      cb.checked = false; window.__showAllMode = false;
+      cb.checked = false;
       cb.addEventListener("change", applyMode);
     }
   }
@@ -189,11 +176,31 @@ else{
     return store;
   }
   async function setAll(active){
-    try{
-      const arr = Array.from(cache.values());
-      if(window.setData) window.setData({ almacenes: arr, activoId: active });
-    }catch(_){}
-  })();
+    const arr = Array.from(cache.values());
+    if(window.setData) window.setData({ almacenes: arr, activoId: active });
+  }
+  window.__sondasUI = {
+    async init(){
+      const alms = await getAlmacenes();
+      if(!alms.length){ if(window.setData) window.setData({ almacenes:[], activoId:null }); return; }
+      const first = alms[0].codigo;
+      const firstStore = await getTanques(first);
+      if(window.setData) window.setData({ almacenes:[firstStore], activoId:first });
+      // Pre-carga y ACTUALIZA la UI con todos los almacenes
+      (async ()=>{
+        for(const a of alms.slice(1)){
+          try{ await getTanques(a.codigo);}catch(e){}
+        }
+        await setAll(first);
+      })();
+    },
+    async change(cod){
+      if(!cache.has(cod)) await getTanques(cod);
+      await setAll(cod);
+    }
+  };
+  document.addEventListener('DOMContentLoaded', ()=>window.__sondasUI.init());
+})();
 </script>
 
 

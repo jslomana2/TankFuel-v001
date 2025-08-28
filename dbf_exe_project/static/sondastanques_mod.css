@@ -102,3 +102,7 @@
 .pct{ will-change: contents; }
 .status .dot{ will-change: background; }
 .card{ contain: content; }
+
+
+/* Warning icon for low level (0–20%) */
+.warnIcon{ font-size:14px; line-height:1; display:inline-block; }
