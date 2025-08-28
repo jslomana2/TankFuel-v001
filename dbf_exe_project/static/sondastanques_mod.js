@@ -12,7 +12,7 @@ function upsertCard(a,t,grid){
   var key=keyForTank(a,t); var ref=__STATE.cardsByKey.get(key);
   var col=colorFrom(t.color||t.colorProducto||t.colorRGB); var colLight=shade(col,+0.24);
   var pct=(t.capacidad>0)? percent((t.volumen/t.capacidad)*100):0;
-  var nivel = (pct >= 91) ? "Lleno" : ((pct >= 51) ? "Alto" : ((pct >= 21) ? "Medio" : "Bajo")); var colorNivel = (pct >= 91) ? "#4ade80" : ((pct >= 51) ? "#16a34a" : ((pct >= 21) ? "#f59e0b" : "#ef4444"));
+  var nivel = nivelFromPct(pct); var colorNivel = nivelColorFromPct(pct);
   if(!ref){
     var card=document.createElement("div"); card.className="card";
     var tankWrap=document.createElement("div"); tankWrap.className="tankWrap";
@@ -59,6 +59,11 @@ function upsertCard(a,t,grid){
 function diffRenderAlmacen(a, host){ var grid=host.querySelector(':scope > .grid'); if(!grid){ grid=document.createElement('div'); grid.className='grid'; host.appendChild(grid);} var frag=document.createDocumentFragment(); (a.tanques||[]).forEach(function(t){ frag.appendChild(upsertCard(a,t,grid)); }); }
 function fastRenderAll(almacenes){ var gridHost=document.getElementById("grid"); gridHost.innerHTML=""; __STATE.sectionByAlm.clear(); almacenes.forEach(function(a){ var section=document.createElement('section'); section.className='almacenSection'; var h=document.createElement('h2'); h.className='almacenTitle'; h.textContent=((a.id!=null?a.id:"") + " – " + (a.nombre||"Almacén")).trim(); section.appendChild(h); gridHost.appendChild(section); __STATE.sectionByAlm.set(a.id||a.nombre||Math.random(), section); diffRenderAlmacen(a, section); }); }
 function fastRenderSingle(a){ var gridHost=document.getElementById("grid"); gridHost.innerHTML=""; var section=document.createElement('section'); section.className='almacenSection'; var h=document.createElement('h2'); h.className='almacenTitle'; h.textContent=((a.id!=null?a.id:"") + " – " + (a.nombre||"Almacén")).trim(); section.appendChild(h); gridHost.appendChild(section); diffRenderAlmacen(a, section); }
+
+
+// -- Estado por porcentaje (Bajo/Medio/Alto/Lleno) --
+function nivelFromPct(p){ p = Math.max(0, Math.min(100, Math.round(p||0))); return (p>=91)?"Lleno":(p>=51)?"Alto":(p>=21)?"Medio":"Bajo"; }
+function nivelColorFromPct(p){ p = Math.max(0, Math.min(100, Math.round(p||0))); return (p>=91)?"#4ade80":(p>=51)?"#16a34a":(p>=21)?"#f59e0b":"#ef4444"; }
 
 function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number"){ var r=(v&255),g=(v>>8)&255,b=(v>>16)&255; return "#"+toHex(r)+toHex(g)+toHex(b);} return "#1987ff"; }
   function shade(hex, pct){ var m=/(?:#)?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(hex); if(!m) return hex; var r=parseInt(m[1],16),g=parseInt(m[2],16),b=parseInt(m[3],16); function adj(x){ return Math.max(0,Math.min(255,Math.round(x+pct*255))); } return "#"+toHex(adj(r))+toHex(adj(g))+toHex(adj(b)); }
@@ -299,7 +304,7 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
       var r1 = document.createElement("div"); r1.style.display="flex"; r1.style.alignItems="center"; r1.style.justifyContent="space-between"; r1.style.margin="4px 0";
       var nm = document.createElement("div"); nm.className="name"; nm.textContent = (t.nombre||"TANQUE");
       var st = document.createElement("div"); st.className="status";
-      var dt = document.createElement("span"); dt.className="dot"; dt.style.background=statusColor(t.status||"ok");
+      var dt = document.createElement("span"); dt.className="dot"; dt.style.background = nivelColorFromPct(pct);
       var stx = document.createElement("span"); stx.textContent = (t.status==="ok"?"Normal":(t.status==="warn"?"Atención":"Alarma"));
       st.appendChild(dt); st.appendChild(stx);
       r1.appendChild(nm); r1.appendChild(st);
