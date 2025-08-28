@@ -8,6 +8,32 @@
 var __STATE = { lastKey:null, cardsByKey:new Map(), sectionByAlm:new Map(), pendingFrame:0, lastRenderAt:0, refreshing:false };
 function hashKey(obj){ try{ var s=JSON.stringify(obj,function(k,v){ if(v&&typeof v==='object'){ if('spark'in v){ var c=Object.assign({},v); delete c.spark; return c; } } return v;}); var h=5381; for(var i=0;i<s.length;i++) h=((h<<5)+h)+s.charCodeAt(i); return (h>>>0).toString(16);}catch(_){return String(Math.random());} }
 function keyForTank(a,t){ return (a.id!=null?a.id:a.nombre||'A') + '|' + (t.id_tanque||t.codigo||t.nombre||Math.random()); }
+
+function renderAllGrouped(almList){
+  var host = document.getElementById("grid");
+  host.innerHTML = "";
+  var frag = document.createDocumentFragment();
+  (almList||[]).forEach(function(a){
+    // Section container
+    var section = document.createElement("div");
+    section.className = "section";
+    // Title
+    var h = document.createElement("h3");
+    var nom = (a.id!=null?a.id:a.codigo||a.nombre||"");
+    var desc = (a.nombre||a.descripcion||"");
+    h.className = "section-title";
+    h.textContent = (nom? (String(nom)+" — "):"") + (desc||"");
+    section.appendChild(h);
+    // Cards grid
+    var grid = document.createElement("div");
+    grid.className = "cards";
+    // Render each tank card
+    (a.tanques||[]).forEach(function(t){ grid.appendChild(upsertCard(a,t,grid)); });
+    section.appendChild(grid);
+    frag.appendChild(section);
+  });
+  host.appendChild(frag);
+}
 function upsertCard(a,t,grid){
   var key=keyForTank(a,t); var ref=__STATE.cardsByKey.get(key);
   var col=colorFrom(t.color||t.colorProducto||t.colorRGB); var colLight=shade(col,+0.24);
@@ -270,7 +296,7 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
 
   function render(){
     if(!almacenes.length){ document.getElementById("grid").innerHTML = ""; renderTotals(null); document.getElementById("histPanel").hidden=true; return; }
-    if(window.__showAllMode){ fastRenderAll(almacenes); document.getElementById("footerInfo").textContent = "Almacenes: "+almacenes.length+" • Activo: todos"; return; }
+    if(window.__showAllMode){ renderAllGrouped(almacenes); document.getElementById("footerInfo").textContent = "Almacenes: "+almacenes.length+" • Activo: todos"; return; }
     var a = almacenes[idxActivo]; renderSelect();
     var currentKey = hashKey(window.__showAllMode ? almacenes : almacenes[idxActivo]);
     if(currentKey === __STATE.lastKey){ return; }
