@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta content="IE=edge" http-equiv="X-UA-Compatible">
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Tanques – Vista avanzada (MODERNO interno)</title>
+<title>Tanques – Vista avanzada (PROCONSI Smart)</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='sondastanques_mod.css') }}">
 </head>
 <body>
@@ -19,7 +19,7 @@
 <div class="spacer"></div>
 <div class="ctrls">
 <button id="alarmsBtn" title="Ir a alarmas">🔔 Alarmas</button>
-<button id="refreshBtn" data-throttle="1" title="Refrescar">⟳ Refrescar</button>
+<button id="refreshBtn" data-throttle="1" title="Refrescar datos">⟳ Refrescar</button>
 <button id="prevBtn" title="Almacén anterior">←</button>
 <select id="almacenSel"></select>
 <button id="nextBtn" title="Almacén siguiente">→</button>
@@ -30,6 +30,9 @@
 <input id="allToggle" type="checkbox"/>
 <span>Ver todos los almacenes</span>
 </label>
+<div style="margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 11px; color: #666;">
+<span id="autoRefreshStatus">🟢 Autorefresco: Activo</span>
+</div>
 </div>
 </header>
 <div class="grid" id="grid"></div>
@@ -178,6 +181,7 @@
       capacidad: t.capacidad, 
       volumen: t.volumen, 
       temperatura: t.temperatura,
+      fecha_ultimo_calado: t.fecha_ultimo_calado, // ¡NUEVO CAMPO!
       alturaAgua: 0, 
       status: 'ok', 
       spark: []
@@ -249,6 +253,57 @@
       if(window.setData) {
         window.setData({ almacenes: allAlmacenes, activoId: cod });
       }
+    },
+    
+    // ¡NUEVA FUNCIÓN PARA AUTOREFRESCO!
+    async refreshData(){
+      try {
+        console.log('🔄 Iniciando refresco de datos...');
+        
+        // Limpiar cache para forzar recarga
+        cache.clear();
+        
+        // Recargar todos los almacenes
+        const alms = await getAlmacenes();
+        if(!alms.length) return;
+        
+        const allStores = [];
+        for(const a of alms){
+          try{ 
+            const store = await getTanques(a.codigo);
+            if(store.tanques && store.tanques.length > 0){
+              allStores.push(store);
+            }
+          }catch(e){ 
+            console.error('❌ Error recargando almacén', a.codigo, e); 
+          }
+        }
+        
+        allAlmacenes = allStores;
+        
+        // Mantener almacén activo actual
+        const currentActive = window.setData && window.setData._lastActivoId;
+        
+        if(window.setData) {
+          window.setData({ almacenes: allStores, activoId: currentActive || alms[0].codigo });
+        }
+        
+        console.log('✅ Refresco completado:', allStores.length, 'almacenes');
+        
+        // Actualizar indicador de estado
+        const statusEl = document.getElementById('autoRefreshStatus');
+        if(statusEl) {
+          statusEl.textContent = '🟢 Última actualización: ' + new Date().toLocaleTimeString();
+        }
+        
+      } catch(e) {
+        console.error('❌ Error en refreshData:', e);
+        
+        const statusEl = document.getElementById('autoRefreshStatus');
+        if(statusEl) {
+          statusEl.textContent = '🔴 Error en autorefresco';
+        }
+      }
     }
   };
   
@@ -275,9 +330,6 @@
   },true);
 })();
 </script>
-
-</body>
-</html>
 
 </body>
 </html>
