@@ -9,91 +9,130 @@ var __STATE = { lastKey:null, cardsByKey:new Map(), sectionByAlm:new Map(), pend
 function hashKey(obj){ try{ var s=JSON.stringify(obj,function(k,v){ if(v&&typeof v==='object'){ if('spark'in v){ var c=Object.assign({},v); delete c.spark; return c; } } return v;}); var h=5381; for(var i=0;i<s.length;i++) h=((h<<5)+h)+s.charCodeAt(i); return (h>>>0).toString(16);}catch(_){return String(Math.random());} }
 function keyForTank(a,t){ return (a.id!=null?a.id:a.nombre||'A') + '|' + (t.id_tanque||t.codigo||t.nombre||Math.random()); }
 function upsertCard(a,t,grid){
-  var key=keyForTank(a,t); var ref=__STATE.cardsByKey.get(key);
-  var col=colorFrom(t.color||t.colorProducto||t.colorRGB); var colLight=shade(col,+0.24);
-  var pct=(t.capacidad>0)? percent((t.volumen/t.capacidad)*100):0;
-  var nivel = nivelFromPct(pct); var colorNivel = nivelColorFromPct(pct);
-  if(!ref){
-    var card=document.createElement("div"); card.className="card";
-    var tankWrap=document.createElement("div"); tankWrap.className="tankWrap";
-    var tank=document.createElement("div"); tank.className="tank";
-    var liquid=document.createElement("div"); liquid.className="liquid";
-    liquid.style.setProperty("--fill",col); liquid.style.setProperty("--fillLight",colLight);
-    var w1=document.createElement("div"); w1.className="wave"; var w2=document.createElement("div"); w2.className="wave wave2"; var w3=document.createElement("div"); w3.className="wave wave3";
-    liquid.appendChild(w1); liquid.appendChild(w2); liquid.appendChild(w3);
-    var gloss=document.createElement("div"); gloss.className="gloss"; tank.appendChild(gloss);
-    var stripe=document.createElement("div"); stripe.className="stripe"; tank.appendChild(stripe);
-    if(t.alturaAgua>0){ var water=document.createElement("div"); water.className="water"; tank.appendChild(water); }
-    tank.appendChild(liquid); makeScale(tankWrap); tankWrap.appendChild(tank);
-    var pctLabel=document.createElement("div"); pctLabel.className="pct"; tankWrap.appendChild(pctLabel);
-    var info=document.createElement("div");
-    var r1=document.createElement("div"); r1.style.display="flex"; r1.style.alignItems="center"; r1.style.justifyContent="space-between"; r1.style.margin="4px 0";
-    var nm=document.createElement("div"); nm.className="name";
-    var st=document.createElement("div"); st.className="status"; var dt=document.createElement("span"); dt.className="dot"; var stx=document.createElement("span"); st.appendChild(dt); st.appendChild(stx);
-      /*__WARN_INSERT_CREATION__*/
-      if(pct <= 20){ dt.className="warnIcon"; dt.textContent="⚠"; dt.style.color="#ef4444"; dt.style.background="transparent"; }
-      else { dt.className="dot"; dt.textContent=""; dt.style.background=nivelColorFromPct(pct); }
+  try {
+    var key=keyForTank(a,t); var ref=__STATE.cardsByKey.get(key);
+    var col=colorFrom(t.color||t.colorProducto||t.colorRGB); var colLight=shade(col,+0.24);
+    var pct=(t.capacidad>0)? percent((t.volumen/t.capacidad)*100):0;
+    var nivel = nivelFromPct(pct); var colorNivel = nivelColorFromPct(pct);
+    if(!ref){
+      var card=document.createElement("div"); card.className="card";
+      var tankWrap=document.createElement("div"); tankWrap.className="tankWrap";
+      var tank=document.createElement("div"); tank.className="tank";
+      var liquid=document.createElement("div"); liquid.className="liquid";
+      liquid.style.setProperty("--fill",col); liquid.style.setProperty("--fillLight",colLight);
+      var w1=document.createElement("div"); w1.className="wave"; var w2=document.createElement("div"); w2.className="wave wave2"; var w3=document.createElement("div"); w3.className="wave wave3";
+      liquid.appendChild(w1); liquid.appendChild(w2); liquid.appendChild(w3);
+      var gloss=document.createElement("div"); gloss.className="gloss"; tank.appendChild(gloss);
+      var stripe=document.createElement("div"); stripe.className="stripe"; tank.appendChild(stripe);
+      if(t.alturaAgua>0){ var water=document.createElement("div"); water.className="water"; tank.appendChild(water); }
+      tank.appendChild(liquid); makeScale(tankWrap); tankWrap.appendChild(tank);
+      var pctLabel=document.createElement("div"); pctLabel.className="pct"; tankWrap.appendChild(pctLabel);
+      var info=document.createElement("div");
+      var r1=document.createElement("div"); r1.style.display="flex"; r1.style.alignItems="center"; r1.style.justifyContent="space-between"; r1.style.margin="4px 0";
+      var nm=document.createElement("div"); nm.className="name";
+      var st=document.createElement("div"); st.className="status"; var dt=document.createElement("span"); dt.className="dot"; var stx=document.createElement("span"); st.appendChild(dt); st.appendChild(stx);
+        /*__WARN_INSERT_CREATION__*/
+        if(pct <= 20){ dt.className="warnIcon"; dt.textContent="⚠"; dt.style.color="#ef4444"; dt.style.background="transparent"; }
+        else { dt.className="dot"; dt.textContent=""; dt.style.background=nivelColorFromPct(pct); }
 
-    r1.appendChild(nm); r1.appendChild(st); info.appendChild(r1);
-    var c=document.createElement("canvas"); c.className="spark"; info.appendChild(c);
-    var kv=document.createElement("div"); kv.className="kv"; info.appendChild(kv);
-    card.appendChild(tankWrap); card.appendChild(info); grid.appendChild(card);
-    card.onclick=function(){ var cards=document.querySelectorAll(".card"); for(var i=0;i<cards.length;i++) cards[i].classList.remove("sel"); card.classList.add("sel"); renderHistory(t); };
-    ref={el:card, parts:{liquid,pctLabel,nm,dt,stx,kv,spark:c,water:null}, last:{pct:-1,volumen:-1,capacidad:-1,nombre:null,nivel:null,color:null}};
-    __STATE.cardsByKey.set(key, ref);
+      r1.appendChild(nm); r1.appendChild(st); info.appendChild(r1);
+      var c=document.createElement("canvas"); c.className="spark"; info.appendChild(c);
+      var kv=document.createElement("div"); kv.className="kv"; info.appendChild(kv);
+      card.appendChild(tankWrap); card.appendChild(info);
+      card.onclick=function(){ var cards=document.querySelectorAll(".card"); for(var i=0;i<cards.length;i++) cards[i].classList.remove("sel"); card.classList.add("sel"); renderHistory(t); };
+      ref={el:card, parts:{liquid,pctLabel,nm,dt,stx,kv,spark:c,water:null}, last:{pct:-1,volumen:-1,capacidad:-1,nombre:null,nivel:null,color:null}};
+      __STATE.cardsByKey.set(key, ref);
+    }
+    var p=ref.parts;
+    if(ref.last.color!==col){ p.liquid.style.setProperty("--fill",col); p.liquid.style.setProperty("--fillLight",colLight); ref.last.color=col; }
+    if(ref.last.pct!==pct){ p.liquid.style.height=pct+"%"; p.pctLabel.textContent=percentFmt(pct); ref.last.pct=pct; }
+    var nombre=(t.nombre||"TANQUE"); if(ref.last.nombre!==nombre){ p.nm.textContent=nombre; ref.last.nombre=nombre; }
+    if(ref.last.nivel!==nivel){ p.dt.style.background=colorNivel; p.stx.textContent=nivel;
+      /*__WARN_INSERT_UPDATE__*/
+      if(pct <= 20){ p.dt.className="warnIcon"; p.dt.textContent="⚠"; p.dt.style.color="#ef4444"; p.dt.style.background="transparent"; }
+      else { p.dt.className="dot"; p.dt.textContent=""; p.dt.style.background=colorNivel; }
+      ref.last.nivel=nivel; }
+    if(ref.last.volumen!==(t.volumen||0) || ref.last.capacidad!==(t.capacidad||0)){
+      var ullage=(t.capacidad||0)-(t.volumen||0);
+      p.kv.innerHTML="<div>Volumen</div><div><strong>"+litersLabel(t.volumen||0)+"</strong></div>"
+                    +"<div>Capacidad</div><div>"+litersLabel(t.capacidad||0)+"</div>"
+                    +"<div>Disponible</div><div>"+litersLabel(ullage)+"</div>"
+                    +"<div>Producto</div><div>"+(t.producto||"-")+"</div>"
+                    +"<div>Temp.</div><div>"+(t.temperatura!=null?t.temperatura.toFixed(1)+' °C':'-')+"</div>"
+                    +"<div>Agua</div><div>"+(t.alturaAgua!=null?t.alturaAgua.toFixed(1)+' mm':'-')+"</div>";
+      ref.last.volumen=(t.volumen||0); ref.last.capacidad=(t.capacidad||0);
+    }
+    // Corregir el requestIdleCallback
+    (window.requestIdleCallback ? 
+      function(cb){ requestIdleCallback(cb, {timeout: 100}); } : 
+      setTimeout
+    )(function(){ drawSpark(p.spark, t.spark||[], col); }, 0);
+    return ref.el;
+  } catch(e) {
+    console.error('❌ Error en upsertCard:', e);
+    return document.createElement("div"); // Fallback
   }
-  var p=ref.parts;
-  if(ref.last.color!==col){ p.liquid.style.setProperty("--fill",col); p.liquid.style.setProperty("--fillLight",colLight); ref.last.color=col; }
-  if(ref.last.pct!==pct){ p.liquid.style.height=pct+"%"; p.pctLabel.textContent=percentFmt(pct); ref.last.pct=pct; }
-  var nombre=(t.nombre||"TANQUE"); if(ref.last.nombre!==nombre){ p.nm.textContent=nombre; ref.last.nombre=nombre; }
-  if(ref.last.nivel!==nivel){ p.dt.style.background=colorNivel; p.stx.textContent=nivel;
-    /*__WARN_INSERT_UPDATE__*/
-    if(pct <= 20){ p.dt.className="warnIcon"; p.dt.textContent="⚠"; p.dt.style.color="#ef4444"; p.dt.style.background="transparent"; }
-    else { p.dt.className="dot"; p.dt.textContent=""; p.dt.style.background=colorNivel; }
-    ref.last.nivel=nivel; }
-  if(ref.last.volumen!==(t.volumen||0) || ref.last.capacidad!==(t.capacidad||0)){
-    var ullage=(t.capacidad||0)-(t.volumen||0);
-    p.kv.innerHTML="<div>Volumen</div><div><strong>"+litersLabel(t.volumen||0)+"</strong></div>"
-                  +"<div>Capacidad</div><div>"+litersLabel(t.capacidad||0)+"</div>"
-                  +"<div>Disponible</div><div>"+litersLabel(ullage)+"</div>"
-                  +"<div>Producto</div><div>"+(t.producto||"-")+"</div>"
-                  +"<div>Temp.</div><div>"+(t.temperatura!=null?t.temperatura.toFixed(1)+' °C':'-')+"</div>"
-                  +"<div>Agua</div><div>"+(t.alturaAgua!=null?t.alturaAgua.toFixed(1)+' mm':'-')+"</div>";
-    ref.last.volumen=(t.volumen||0); ref.last.capacidad=(t.capacidad||0);
-  }
-  (window.requestIdleCallback?requestIdleCallback:setTimeout)(function(){ drawSpark(p.spark, t.spark||[], col); },0);
-  return ref.el;
 }
 function diffRenderAlmacen(a, host){ var grid=host.querySelector(':scope > .grid'); if(!grid){ grid=document.createElement('div'); grid.className='grid'; host.appendChild(grid);} var frag=document.createDocumentFragment(); (a.tanques||[]).forEach(function(t){ frag.appendChild(upsertCard(a,t,grid)); }); }
 
 function fastRenderAll(almacenes){ 
-  var gridHost=document.getElementById("grid"); 
-  gridHost.innerHTML=""; 
-  __STATE.cardsByKey.clear(); 
-  __STATE.sectionByAlm.clear(); 
-  
-  almacenes.forEach(function(a){ 
-    if(!a.tanques || !a.tanques.length) return; // Skip almacenes sin tanques
+  try {
+    console.log('🎯 fastRenderAll - Almacenes recibidos:', almacenes.length);
     
-    var section=document.createElement('section'); 
-    section.className='almacenSection'; 
-    var h=document.createElement('h2'); 
-    h.className='almacenTitle'; 
-    h.textContent=(a.nombre || a.id || "Almacén"); 
-    section.appendChild(h); 
+    var gridHost=document.getElementById("grid"); 
+    if(!gridHost) {
+      console.error('❌ No se encontró elemento #grid');
+      return;
+    }
     
-    var grid=document.createElement('div'); 
-    grid.className='grid'; 
-    section.appendChild(grid);
+    gridHost.innerHTML=""; 
+    __STATE.cardsByKey.clear(); 
+    __STATE.sectionByAlm.clear(); 
     
-    // Renderizar tanques directamente
-    a.tanques.forEach(function(t){ 
-      grid.appendChild(upsertCard(a,t,grid)); 
+    var totalTanques = 0;
+    
+    almacenes.forEach(function(a, index){ 
+      console.log(`📦 Procesando almacén ${index + 1}: ${a.nombre || a.id}`, a);
+      
+      if(!a.tanques || !a.tanques.length) {
+        console.log(`⚠️ Almacén ${a.nombre || a.id} sin tanques`);
+        return; // Skip almacenes sin tanques
+      }
+      
+      var section=document.createElement('section'); 
+      section.className='almacenSection'; 
+      var h=document.createElement('h2'); 
+      h.className='almacenTitle'; 
+      h.textContent=(a.nombre || a.id || "Almacén"); 
+      section.appendChild(h); 
+      
+      var grid=document.createElement('div'); 
+      grid.className='grid'; 
+      section.appendChild(grid);
+      
+      // Renderizar tanques directamente
+      a.tanques.forEach(function(t, tIndex){ 
+        try {
+          console.log(`🛢️ Renderizando tanque ${tIndex + 1}: ${t.nombre}`);
+          var card = upsertCard(a, t, grid);
+          grid.appendChild(card); 
+          totalTanques++;
+        } catch(e) {
+          console.error(`❌ Error renderizando tanque ${t.nombre}:`, e);
+        }
+      }); 
+      
+      gridHost.appendChild(section); 
+      __STATE.sectionByAlm.set(a.id||a.nombre||Math.random(), section);
+      
+      console.log(`✅ Almacén ${a.nombre || a.id} completado con ${a.tanques.length} tanques`);
     }); 
     
-    gridHost.appendChild(section); 
-    __STATE.sectionByAlm.set(a.id||a.nombre||Math.random(), section); 
-  }); 
+    console.log(`🎉 fastRenderAll completado - Total tanques: ${totalTanques}`);
+    
+  } catch(e) {
+    console.error('❌ Error en fastRenderAll:', e);
+  }
 }
 
 function fastRenderSingle(a){ var gridHost=document.getElementById("grid"); gridHost.innerHTML=""; var section=document.createElement('section'); section.className='almacenSection'; var h=document.createElement('h2'); h.className='almacenTitle'; h.textContent=((a.id!=null?a.id:"") + " – " + (a.nombre||"Almacén")).trim(); section.appendChild(h); gridHost.appendChild(section); diffRenderAlmacen(a, section); }
@@ -306,17 +345,39 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
   }
 
   function render(){
-    if(!almacenes.length){ document.getElementById("grid").innerHTML = ""; renderTotals(null); document.getElementById("histPanel").hidden=true; return; }
-    if(window.__showAllMode){ 
-      fastRenderAll(almacenes); 
-      document.getElementById("footerInfo").textContent = "Almacenes: "+almacenes.length+" • Activo: todos";
-      // Para el modo "todos", calculamos totales globales
-      var globalTotals = {tanques: []};
-      almacenes.forEach(function(alm){ (alm.tanques||[]).forEach(function(t){ globalTotals.tanques.push(t); }); });
-      renderTotals(globalTotals);
-      return; 
+    try {
+      if(!almacenes.length){ 
+        document.getElementById("grid").innerHTML = ""; 
+        renderTotals(null); 
+        document.getElementById("histPanel").hidden=true; 
+        return; 
+      }
+      
+      if(window.__showAllMode){ 
+        console.log('🎯 Modo "Ver todos" activo - Almacenes:', almacenes.length);
+        fastRenderAll(almacenes); 
+        document.getElementById("footerInfo").textContent = "Almacenes: "+almacenes.length+" • Activo: todos";
+        // Para el modo "todos", calculamos totales globales
+        var globalTotals = {tanques: []};
+        almacenes.forEach(function(alm){ 
+          if(alm.tanques) {
+            alm.tanques.forEach(function(t){ globalTotals.tanques.push(t); }); 
+          }
+        });
+        renderTotals(globalTotals);
+        return; 
+      }
+      
+      var a = almacenes[idxActivo]; 
+      if(!a) {
+        console.error('❌ No hay almacén activo válido:', idxActivo);
+        return;
+      }
+      
+      renderSelect();
+    } catch(e) {
+      console.error('❌ Error en render():', e);
     }
-    var a = almacenes[idxActivo]; renderSelect();
     var currentKey = hashKey(window.__showAllMode ? almacenes : almacenes[idxActivo]);
     if(currentKey === __STATE.lastKey){ return; }
     __STATE.lastKey = currentKey;
@@ -392,12 +453,14 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
 
   window.setData = function(input){
     try{
+      console.log('📊 setData llamado con:', input);
       if(typeof input === "string") input = JSON.parse(input);
       if(Array.isArray(input)){ almacenes = groupByAlmacen(input);
       }else if(input && Array.isArray(input.almacenes)){
         almacenes = input.almacenes; if(input.activoId){ var i = almacenes.findIndex(function(a){ return a.id==input.activoId; }); if(i>=0) idxActivo = i; }
       }else{ almacenes = []; }
       idxActivo = Math.min(Math.max(0, idxActivo), Math.max(0, almacenes.length-1));
+      console.log('✅ Almacenes procesados:', almacenes.length, 'Activo:', idxActivo);
       render(); window.__vfp_integration__ = true;
     }catch(e){ console.error("setData error:", e); }
   };
@@ -478,6 +541,9 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
       {fecha:"2025-08-02 08:00", medido:22200, libro:22100}
     ]
   };
+
+  if(!window.__vfp_integration__) { window.setData(demo); window.setHistoryData(hist); }
+})();
 
   if(!window.__vfp_integration__) { window.setData(demo); window.setHistoryData(hist); }
 })();
