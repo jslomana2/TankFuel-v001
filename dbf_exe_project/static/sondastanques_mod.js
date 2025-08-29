@@ -313,7 +313,7 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
       var nm = document.createElement("div"); nm.className="name"; nm.textContent = (t.nombre||"TANQUE");
       var st = document.createElement("div"); st.className="status";
       var dt = document.createElement("span"); dt.className="dot"; dt.style.background = nivelColorFromPct(pct);
-      // AQUÍ ESTÁ EL CAMBIO PRINCIPAL: usar nivelFromPct en lugar de t.status
+      // CAMBIO PRINCIPAL: usar nivelFromPct en lugar de t.status
       var stx = document.createElement("span"); stx.textContent = nivelFromPct(pct);
       st.appendChild(dt); st.appendChild(stx);
       /*__WARN_INSERT_CREATION__*/
