@@ -65,7 +65,37 @@ function upsertCard(a,t,grid){
   return ref.el;
 }
 function diffRenderAlmacen(a, host){ var grid=host.querySelector(':scope > .grid'); if(!grid){ grid=document.createElement('div'); grid.className='grid'; host.appendChild(grid);} var frag=document.createDocumentFragment(); (a.tanques||[]).forEach(function(t){ frag.appendChild(upsertCard(a,t,grid)); }); }
-function fastRenderAll(almacenes){ var gridHost=document.getElementById("grid"); gridHost.innerHTML=""; __STATE.sectionByAlm.clear(); almacenes.forEach(function(a){ var section=document.createElement('section'); section.className='almacenSection'; var h=document.createElement('h2'); h.className='almacenTitle'; h.textContent=((a.id!=null?a.id:"") + " – " + (a.nombre||"Almacén")).trim(); section.appendChild(h); gridHost.appendChild(section); __STATE.sectionByAlm.set(a.id||a.nombre||Math.random(), section); diffRenderAlmacen(a, section); }); }
+
+function fastRenderAll(almacenes){ 
+  var gridHost=document.getElementById("grid"); 
+  gridHost.innerHTML=""; 
+  __STATE.cardsByKey.clear(); 
+  __STATE.sectionByAlm.clear(); 
+  
+  almacenes.forEach(function(a){ 
+    if(!a.tanques || !a.tanques.length) return; // Skip almacenes sin tanques
+    
+    var section=document.createElement('section'); 
+    section.className='almacenSection'; 
+    var h=document.createElement('h2'); 
+    h.className='almacenTitle'; 
+    h.textContent=(a.nombre || a.id || "Almacén"); 
+    section.appendChild(h); 
+    
+    var grid=document.createElement('div'); 
+    grid.className='grid'; 
+    section.appendChild(grid);
+    
+    // Renderizar tanques directamente
+    a.tanques.forEach(function(t){ 
+      grid.appendChild(upsertCard(a,t,grid)); 
+    }); 
+    
+    gridHost.appendChild(section); 
+    __STATE.sectionByAlm.set(a.id||a.nombre||Math.random(), section); 
+  }); 
+}
+
 function fastRenderSingle(a){ var gridHost=document.getElementById("grid"); gridHost.innerHTML=""; var section=document.createElement('section'); section.className='almacenSection'; var h=document.createElement('h2'); h.className='almacenTitle'; h.textContent=((a.id!=null?a.id:"") + " – " + (a.nombre||"Almacén")).trim(); section.appendChild(h); gridHost.appendChild(section); diffRenderAlmacen(a, section); }
 
 
@@ -277,7 +307,15 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
 
   function render(){
     if(!almacenes.length){ document.getElementById("grid").innerHTML = ""; renderTotals(null); document.getElementById("histPanel").hidden=true; return; }
-    if(window.__showAllMode){ fastRenderAll(almacenes); document.getElementById("footerInfo").textContent = "Almacenes: "+almacenes.length+" • Activo: todos"; return; }
+    if(window.__showAllMode){ 
+      fastRenderAll(almacenes); 
+      document.getElementById("footerInfo").textContent = "Almacenes: "+almacenes.length+" • Activo: todos";
+      // Para el modo "todos", calculamos totales globales
+      var globalTotals = {tanques: []};
+      almacenes.forEach(function(alm){ (alm.tanques||[]).forEach(function(t){ globalTotals.tanques.push(t); }); });
+      renderTotals(globalTotals);
+      return; 
+    }
     var a = almacenes[idxActivo]; renderSelect();
     var currentKey = hashKey(window.__showAllMode ? almacenes : almacenes[idxActivo]);
     if(currentKey === __STATE.lastKey){ return; }
