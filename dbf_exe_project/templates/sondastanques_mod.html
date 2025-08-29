@@ -168,28 +168,29 @@
     cache.set(cod, store);
     return store;
   }
-  async function setAll(active){
-    const arr = Array.from(cache.values());
-    if(window.setData) window.setData({ almacenes: arr, activoId: active });
-  }
+  // Función setAll eliminada - ya no necesaria
   window.__sondasUI = {
     async init(){
       const alms = await getAlmacenes();
       if(!alms.length){ if(window.setData) window.setData({ almacenes:[], activoId:null }); return; }
+      
+      // Cargar TODOS los almacenes primero
+      const allStores = [];
+      for(const a of alms){
+        try{ 
+          const store = await getTanques(a.codigo);
+          allStores.push(store);
+        }catch(e){ console.error('Error cargando almacén', a.codigo, e); }
+      }
+      
+      // Establecer datos con todos los almacenes cargados
       const first = alms[0].codigo;
-      const firstStore = await getTanques(first);
-      if(window.setData) window.setData({ almacenes:[firstStore], activoId:first });
-      // Pre-carga y ACTUALIZA la UI con todos los almacenes
-      (async ()=>{
-        for(const a of alms.slice(1)){
-          try{ await getTanques(a.codigo);}catch(e){}
-        }
-        await setAll(first);
-      })();
+      if(window.setData) window.setData({ almacenes: allStores, activoId: first });
     },
     async change(cod){
       if(!cache.has(cod)) await getTanques(cod);
-      await setAll(cod);
+      const arr = Array.from(cache.values());
+      if(window.setData) window.setData({ almacenes: arr, activoId: cod });
     }
   };
   document.addEventListener('DOMContentLoaded', ()=>window.__sondasUI.init());
