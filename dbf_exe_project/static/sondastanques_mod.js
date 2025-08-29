@@ -544,6 +544,3 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
 
   if(!window.__vfp_integration__) { window.setData(demo); window.setHistoryData(hist); }
 })();
-
-  if(!window.__vfp_integration__) { window.setData(demo); window.setHistoryData(hist); }
-})();
