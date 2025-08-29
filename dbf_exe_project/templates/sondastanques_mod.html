@@ -6,13 +6,48 @@
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Tanques – Vista avanzada (PROCONSI Smart)</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='sondastanques_mod.css') }}">
+<style>
+/* Estilos adicionales para autorefresco */
+.h-sub{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:8px 16px;
+  border-top:1px solid #e6e9ee;
+  background:#fff;
+  color:#0b1220;
+  justify-content: space-between;
+}
+.chk-all{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  font-size:13px;
+}
+.chk-all input[type="checkbox"]{
+  width:16px;
+  height:16px;
+  accent-color:#0b1220;
+}
+.auto-refresh-indicator {
+  font-size: 13px;
+  color: #666;
+  display: flex;
+  align-items: center;
+}
+.auto-refresh-indicator #autoRefreshStatus {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0,0,0,0.05);
+}
+</style>
 </head>
 <body>
 <div class="wrap">
 <header>
 <div class="h-inner">
 <a class="brand" href="https://www.proconsi.com" rel="noopener" target="_blank">
-<img alt="Proconsi" onerror="this.style.display='none'; this.parentNode.insertAdjacentHTML('beforeend','&lt;strong&gt;PROCONSI&lt;/strong&gt;')" src="https://cdn-ildmohp.nitrocdn.com/OlNFhHrAqkTDgXLhkVWXZfchjFGWnneH/assets/images/optimized/rev-7a6779b/proconsi.com/wp-content/uploads/Logotipo-completo-Proconsi-PNG-1.png"/>
+<img alt="Proconsi" onerror="this.style.display='none'; this.parentNode.insertAdjacentHTML('beforeend','&lt;strong style=&quot;background:#0e1520;color:#fff;padding:4px 8px;border-radius:4px;font-size:12px;&quot;&gt;PROCONSI&lt;/strong&gt;')" src="{{ url_for('static', filename='proconsi.svg') }}"/>
 </a>
 <div class="title">Tanques · Vista avanzada</div>
 <div class="pill" id="summary">Cargando…</div>
@@ -30,7 +65,7 @@
 <input id="allToggle" type="checkbox"/>
 <span>Ver todos los almacenes</span>
 </label>
-<div style="margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 11px; color: #666;">
+<div class="auto-refresh-indicator">
 <span id="autoRefreshStatus">🟢 Autorefresco: Activo</span>
 </div>
 </div>
@@ -293,7 +328,7 @@
         // Actualizar indicador de estado
         const statusEl = document.getElementById('autoRefreshStatus');
         if(statusEl) {
-          statusEl.textContent = '🟢 Última actualización: ' + new Date().toLocaleTimeString();
+          statusEl.innerHTML = '🟢 Actualizado: ' + new Date().toLocaleTimeString();
         }
         
       } catch(e) {
@@ -301,7 +336,7 @@
         
         const statusEl = document.getElementById('autoRefreshStatus');
         if(statusEl) {
-          statusEl.textContent = '🔴 Error en autorefresco';
+          statusEl.innerHTML = '🔴 Error al actualizar';
         }
       }
     }
