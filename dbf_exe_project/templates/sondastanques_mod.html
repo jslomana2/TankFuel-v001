@@ -40,6 +40,51 @@
   border-radius: 4px;
   background: rgba(0,0,0,0.05);
 }
+
+/* Estilos para modo "Ver todos" con layout horizontal */
+.almacenSection {
+  margin: 20px 16px 30px 16px; 
+  padding: 0; 
+  background: transparent; 
+  border: none; 
+  border-radius: 0;
+}
+
+.almacenTitle {
+  font-size: 18px; 
+  font-weight: 700; 
+  margin: 0 0 16px 0; 
+  color: #e7eef6;
+  background: linear-gradient(135deg, #0e1520, #1a2332);
+  padding: 12px 16px;
+  border-radius: 12px;
+  border-left: 4px solid #2aa8ff;
+}
+
+.tanks-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)) !important;
+  gap: 16px !important;
+  padding: 0 !important;
+}
+
+/* Asegurar que el grid principal funcione para ambos modos */
+#grid {
+  padding: 0;
+}
+
+/* Cuando NO está en modo "ver todos", usar el grid normal */
+#grid:not(.show-all-mode) {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+  padding: 14px 16px;
+}
+
+/* Cuando SÍ está en modo "ver todos", usar display block */
+#grid.show-all-mode {
+  display: block !important;
+}
 </style>
 </head>
 <body>
