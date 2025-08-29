@@ -1,6 +1,72 @@
 (function(){
   var almacenes = []; var idxActivo = 0; var historyByTank = {};
   var selectedTank = null; var filteredRows = [];
+  
+  // AUTOREFRESCO INTELIGENTE
+  var autoRefresh = {
+    enabled: true,
+    interval: 60000, // 1 minuto
+    timer: null,
+    lastCheck: 0,
+    checking: false,
+    
+    start: function() {
+      if(this.timer) clearInterval(this.timer);
+      this.timer = setInterval(() => this.checkForUpdates(), this.interval);
+      console.log('🔄 Autorefresco activado cada', this.interval/1000, 'segundos');
+    },
+    
+    stop: function() {
+      if(this.timer) {
+        clearInterval(this.timer);
+        this.timer = null;
+      }
+      console.log('⏹️ Autorefresco desactivado');
+    },
+    
+    async checkForUpdates() {
+      if(this.checking) return;
+      this.checking = true;
+      
+      try {
+        console.log('🔍 Verificando cambios...');
+        const response = await fetch('/api/status');
+        const data = await response.json();
+        
+        if(data.ok && data.changes_detected) {
+          console.log('🆕 Cambios detectados, recargando datos...');
+          this.showRefreshIndicator();
+          await window.__sondasUI.refreshData();
+          this.hideRefreshIndicator();
+        } else {
+          console.log('✅ Sin cambios detectados');
+        }
+      } catch(e) {
+        console.error('❌ Error verificando actualizaciones:', e);
+      }
+      
+      this.checking = false;
+      this.lastCheck = Date.now();
+    },
+    
+    showRefreshIndicator() {
+      const btn = document.getElementById('refreshBtn');
+      if(btn) {
+        btn.style.backgroundColor = '#f59e0b';
+        btn.textContent = '🔄 Actualizando...';
+        btn.disabled = true;
+      }
+    },
+    
+    hideRefreshIndicator() {
+      const btn = document.getElementById('refreshBtn');
+      if(btn) {
+        btn.style.backgroundColor = '';
+        btn.textContent = '⟳ Refrescar';
+        btn.disabled = false;
+      }
+    }
+  };
 
   function toHex(n){ return ("0"+n.toString(16)).slice(-2); }
   
@@ -24,7 +90,6 @@ function upsertCard(a,t,grid){
       liquid.appendChild(w1); liquid.appendChild(w2); liquid.appendChild(w3);
       var gloss=document.createElement("div"); gloss.className="gloss"; tank.appendChild(gloss);
       var stripe=document.createElement("div"); stripe.className="stripe"; tank.appendChild(stripe);
-      if(t.alturaAgua>0){ var water=document.createElement("div"); water.className="water"; tank.appendChild(water); }
       tank.appendChild(liquid); makeScale(tankWrap); tankWrap.appendChild(tank);
       var pctLabel=document.createElement("div"); pctLabel.className="pct"; tankWrap.appendChild(pctLabel);
       var info=document.createElement("div");
@@ -40,7 +105,7 @@ function upsertCard(a,t,grid){
       var kv=document.createElement("div"); kv.className="kv"; info.appendChild(kv);
       card.appendChild(tankWrap); card.appendChild(info);
       card.onclick=function(){ var cards=document.querySelectorAll(".card"); for(var i=0;i<cards.length;i++) cards[i].classList.remove("sel"); card.classList.add("sel"); renderHistory(t); };
-      ref={el:card, parts:{liquid,pctLabel,nm,dt,stx,kv,spark:c,water:null}, last:{pct:-1,volumen:-1,capacidad:-1,nombre:null,nivel:null,color:null}};
+      ref={el:card, parts:{liquid,pctLabel,nm,dt,stx,kv,spark:c}, last:{pct:-1,volumen:-1,capacidad:-1,nombre:null,nivel:null,color:null,fecha:null}};
       __STATE.cardsByKey.set(key, ref);
     }
     var p=ref.parts;
@@ -52,15 +117,17 @@ function upsertCard(a,t,grid){
       if(pct <= 20){ p.dt.className="warnIcon"; p.dt.textContent="⚠"; p.dt.style.color="#ef4444"; p.dt.style.background="transparent"; }
       else { p.dt.className="dot"; p.dt.textContent=""; p.dt.style.background=colorNivel; }
       ref.last.nivel=nivel; }
-    if(ref.last.volumen!==(t.volumen||0) || ref.last.capacidad!==(t.capacidad||0)){
+    if(ref.last.volumen!==(t.volumen||0) || ref.last.capacidad!==(t.capacidad||0) || ref.last.fecha!==(t.fecha_ultimo_calado||'')){
       var ullage=(t.capacidad||0)-(t.volumen||0);
+      // CAMBIO PRINCIPAL: Mostrar fecha en lugar de agua con color azul
+      var fechaDisplay = t.fecha_ultimo_calado || '-';
       p.kv.innerHTML="<div>Volumen</div><div><strong>"+litersLabel(t.volumen||0)+"</strong></div>"
                     +"<div>Capacidad</div><div>"+litersLabel(t.capacidad||0)+"</div>"
                     +"<div>Disponible</div><div>"+litersLabel(ullage)+"</div>"
                     +"<div>Producto</div><div>"+(t.producto||"-")+"</div>"
                     +"<div>Temp.</div><div>"+(t.temperatura!=null?t.temperatura.toFixed(1)+' °C':'-')+"</div>"
-                    +"<div>Agua</div><div>"+(t.alturaAgua!=null?t.alturaAgua.toFixed(1)+' mm':'-')+"</div>";
-      ref.last.volumen=(t.volumen||0); ref.last.capacidad=(t.capacidad||0);
+                    +"<div>Fecha</div><div style='color:#2aa8ff;font-weight:600'>"+fechaDisplay+"</div>";
+      ref.last.volumen=(t.volumen||0); ref.last.capacidad=(t.capacidad||0); ref.last.fecha=(t.fecha_ultimo_calado||'');
     }
     // Corregir el requestIdleCallback
     (window.requestIdleCallback ? 
@@ -401,7 +468,6 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
       liquid.appendChild(w1); liquid.appendChild(w2); liquid.appendChild(w3);
       var gloss=document.createElement("div"); gloss.className="gloss"; tank.appendChild(gloss);
       var stripe=document.createElement("div"); stripe.className="stripe"; tank.appendChild(stripe);
-      if(t.alturaAgua>0){ var water=document.createElement("div"); water.className="water"; tank.appendChild(water); }
       tank.appendChild(liquid);
       makeScale(tankWrap);
       tankWrap.appendChild(tank);
@@ -425,13 +491,14 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
       var c = document.createElement("canvas"); c.className="spark"; info.appendChild(c);
 
       var ullage = (t.capacidad||0) - (t.volumen||0);
+      var fechaDisplay = t.fecha_ultimo_calado || '-';
       var kv = document.createElement("div"); kv.className="kv";
       kv.innerHTML = "<div>Volumen</div><div><strong>"+litersLabel(t.volumen||0)+"</strong></div>"
                    + "<div>Capacidad</div><div>"+litersLabel(t.capacidad||0)+"</div>"
                    + "<div>Disponible</div><div>"+litersLabel(ullage)+"</div>"
                    + "<div>Producto</div><div>"+(t.producto||"-")+"</div>"
                    + "<div>Temp.</div><div>"+(t.temperatura!=null? t.temperatura.toFixed(1)+' °C' : '-')+"</div>"
-                   + "<div>Agua</div><div>"+(t.alturaAgua!=null? t.alturaAgua.toFixed(1)+' mm' : '-')+"</div>";
+                   + "<div>Fecha</div><div style='color:#2aa8ff;font-weight:600'>"+fechaDisplay+"</div>";
       info.appendChild(kv);
 
       card.appendChild(tankWrap); card.appendChild(info); grid.appendChild(card);
@@ -472,7 +539,15 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
   document.getElementById("almacenSel").addEventListener("change", function(e){ window.setWarehouse(e.target.value); });
   document.getElementById("prevBtn").addEventListener("click", function(){ window.prevWarehouse(); });
   document.getElementById("nextBtn").addEventListener("click", function(){ window.nextWarehouse(); });
-  document.getElementById("refreshBtn").addEventListener("click", function(){ if(typeof window.vfpRefresh==='function') window.vfpRefresh(); else location.reload(); });
+  document.getElementById("refreshBtn").addEventListener("click", function(){ 
+    autoRefresh.showRefreshIndicator();
+    if(typeof window.vfpRefresh==='function') window.vfpRefresh(); 
+    else if(window.__sondasUI && window.__sondasUI.refreshData) {
+      window.__sondasUI.refreshData().then(() => autoRefresh.hideRefreshIndicator());
+    } else {
+      location.reload(); 
+    }
+  });
   document.getElementById("groupSel").addEventListener("change", applyFilterAndRender);
   document.getElementById("applyFilter").addEventListener("click", applyFilterAndRender);
   document.getElementById("quick7").addEventListener("click", function(){
@@ -490,8 +565,16 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
   document.getElementById("pdfBtn").addEventListener("click", function(){ if(!selectedTank) return; exportPdf(); });
   window.addEventListener("resize", function(){ applyFilterAndRender(); });
 
+  // Inicializar autorefresco al cargar
+  window.addEventListener('load', function() {
+    setTimeout(() => {
+      autoRefresh.start();
+      console.log('🚀 Sistema de autorefresco iniciado');
+    }, 5000); // Esperar 5s después de cargar
+  });
+
   var amarillo="#fbbf24", azul="#3b82f6", rojo="#ef4444", hvo="#39FF14";
-  function t(n,prod,col,cap,vol,alm){ return { almacen:alm, nombre:n, producto:prod, color:col, capacidad:cap, volumen:vol, status:"ok", alturaAgua:2, temperatura:24.0, spark:[50,52,51,53,54,55,56,58,59,57] }; }
+  function t(n,prod,col,cap,vol,alm){ return { almacen:alm, nombre:n, producto:prod, color:col, capacidad:cap, volumen:vol, status:"ok", temperatura:24.0, spark:[50,52,51,53,54,55,56,58,59,57], fecha_ultimo_calado:"29/08/2025 14:30" }; }
 
   var demo = {
     almacenes:[
