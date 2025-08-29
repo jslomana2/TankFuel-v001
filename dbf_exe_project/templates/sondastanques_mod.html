@@ -75,7 +75,7 @@
 <script>
 (function(){
   // Control para mostrar todos los almacenes por secciones
-  var cb, lastRaw = null, setDataOrig = null;
+  var cb, lastRaw = null, setDataOrig = null, allAlmacenes = [];
   function qs(id){ return document.getElementById(id); }
   function setControlsEnabled(flag){
     var sel = qs("almacenSel"), prev = qs("prevBtn"), next = qs("nextBtn");
@@ -85,15 +85,15 @@
   }
   
   function applyMode(){
-    if(!setDataOrig || lastRaw==null) return;
+    if(!setDataOrig) return;
     var all = !!(cb && cb.checked);
-    if(all){
+    window.__showAllMode = all;
+    
+    if(all && allAlmacenes.length > 0){
       setControlsEnabled(false);
-      window.__showAllMode = true;
-      setDataOrig(lastRaw); // Mantener estructura original para secciones separadas
-    }else{
+      setDataOrig({ almacenes: allAlmacenes, activoId: null });
+    }else if(!all && lastRaw){
       setControlsEnabled(true);
-      window.__showAllMode = false;
       setDataOrig(lastRaw);
     }
   }
@@ -107,6 +107,11 @@
           setDataOrig = window.setData;
           window.setData = function(input){
             lastRaw = input;
+            // Guardar todos los almacenes para el modo "Ver todos"
+            if(input && input.almacenes){
+              allAlmacenes = input.almacenes.slice();
+            }
+            // Aplicar según modo actual
             applyMode();
           };
         }
@@ -119,11 +124,10 @@
   
   function init(){
     cb = qs("allToggle");
+    window.__showAllMode = false;
     hookSetDataSoon();
     if(cb){
-      // por defecto: desmarcado; deja controles habilitados
       cb.checked = false;
-      window.__showAllMode = false;
       cb.addEventListener("change", applyMode);
     }
   }
@@ -142,58 +146,116 @@
 <script>
 (function(){
   const cache = new Map();
-  async function j(u){const r=await fetch(u);return r.json();}
+  let allAlmacenes = [];
+  
+  async function j(u){
+    try {
+      const r = await fetch(u);
+      if(!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    } catch(e) {
+      console.error('Error en petición:', u, e);
+      return {almacenes: [], tanques: []};
+    }
+  }
+  
   async function getAlmacenes(){
     const a = await j('/api/almacenes?n=200');
-    return a.almacenes||[];
+    return a.almacenes || [];
   }
+  
   async function getTanques(cod){
     if(cache.has(cod)) return cache.get(cod);
-    const d = await j('/api/tanques_norm?almacen='+encodeURIComponent(cod)+'&n=5');
-    const tanques = (d.tanques||[]).map(t=>({
-      almacen:t.almacen, nombre:t.tanque_nombre, producto:t.producto_nombre||t.producto,
-      color:t.producto_color, colorProducto:t.producto_color, colorRGB:t.producto_color,
-      capacidad:t.capacidad, volumen:t.volumen, temperatura:t.temperatura,
-      alturaAgua:0, status:'ok', spark:[]
+    
+    const d = await j('/api/tanques_norm?almacen=' + encodeURIComponent(cod) + '&n=5');
+    const tanques = (d.tanques || []).map(t => ({
+      almacen: t.almacen, 
+      nombre: t.tanque_nombre, 
+      producto: t.producto_nombre || t.producto,
+      color: t.producto_color, 
+      colorProducto: t.producto_color, 
+      colorRGB: t.producto_color,
+      capacidad: t.capacidad, 
+      volumen: t.volumen, 
+      temperatura: t.temperatura,
+      alturaAgua: 0, 
+      status: 'ok', 
+      spark: []
     }));
+    
     // Obtener nombre completo del almacén (código + población)
-    const almacenInfo = (d.almacenes||[]).find(a=>a.codigo===cod);
+    const almacenInfo = (d.almacenes || []).find(a => a.codigo === cod);
     const nombreCompleto = almacenInfo ? `${cod} – ${almacenInfo.nombre}` : cod;
     
     const store = { 
-      id: d.almacen||cod, 
+      id: d.almacen || cod, 
       nombre: nombreCompleto,
       tanques 
     };
+    
     cache.set(cod, store);
     return store;
   }
-  // Función setAll eliminada - ya no necesaria
+  
   window.__sondasUI = {
     async init(){
-      const alms = await getAlmacenes();
-      if(!alms.length){ if(window.setData) window.setData({ almacenes:[], activoId:null }); return; }
-      
-      // Cargar TODOS los almacenes primero
-      const allStores = [];
-      for(const a of alms){
-        try{ 
-          const store = await getTanques(a.codigo);
-          allStores.push(store);
-        }catch(e){ console.error('Error cargando almacén', a.codigo, e); }
+      try {
+        console.log('🔄 Iniciando carga de almacenes...');
+        const alms = await getAlmacenes();
+        console.log('📦 Almacenes encontrados:', alms.length);
+        
+        if(!alms.length){ 
+          if(window.setData) window.setData({ almacenes:[], activoId:null }); 
+          return; 
+        }
+        
+        // Cargar TODOS los almacenes de forma secuencial
+        const allStores = [];
+        for(let i = 0; i < alms.length; i++){
+          const a = alms[i];
+          try{ 
+            console.log(`📋 Cargando almacén ${i+1}/${alms.length}: ${a.codigo}`);
+            const store = await getTanques(a.codigo);
+            if(store.tanques && store.tanques.length > 0){
+              allStores.push(store);
+              console.log(`✅ ${a.codigo}: ${store.tanques.length} tanques`);
+            } else {
+              console.log(`⚠️ ${a.codigo}: sin tanques`);
+            }
+          }catch(e){ 
+            console.error('❌ Error cargando almacén', a.codigo, e); 
+          }
+        }
+        
+        console.log(`🎯 Total almacenes con tanques: ${allStores.length}`);
+        allAlmacenes = allStores;
+        
+        // Establecer datos con todos los almacenes cargados
+        const first = alms[0].codigo;
+        if(window.setData) {
+          console.log('📊 Estableciendo datos en UI...');
+          window.setData({ almacenes: allStores, activoId: first });
+        }
+        
+        console.log('✨ Carga completada exitosamente');
+        
+      } catch(e) {
+        console.error('💥 Error en inicialización:', e);
       }
-      
-      // Establecer datos con todos los almacenes cargados
-      const first = alms[0].codigo;
-      if(window.setData) window.setData({ almacenes: allStores, activoId: first });
     },
+    
     async change(cod){
       if(!cache.has(cod)) await getTanques(cod);
-      const arr = Array.from(cache.values());
-      if(window.setData) window.setData({ almacenes: arr, activoId: cod });
+      if(window.setData) {
+        window.setData({ almacenes: allAlmacenes, activoId: cod });
+      }
     }
   };
-  document.addEventListener('DOMContentLoaded', ()=>window.__sondasUI.init());
+  
+  document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 DOM listo, iniciando carga...');
+    window.__sondasUI.init();
+  });
 })();
 </script>
 
@@ -214,7 +276,5 @@
 })();
 </script>
 
-</body>
-</html>
 </body>
 </html>
