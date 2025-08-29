@@ -153,6 +153,7 @@ function fastRenderAll(almacenes){
     }
     
     gridHost.innerHTML=""; 
+    gridHost.style.display = "block"; // Cambiar a block para permitir secciones verticales
     __STATE.cardsByKey.clear(); 
     __STATE.sectionByAlm.clear(); 
     
@@ -166,29 +167,36 @@ function fastRenderAll(almacenes){
         return; // Skip almacenes sin tanques
       }
       
+      // Crear sección del almacén
       var section=document.createElement('section'); 
       section.className='almacenSection'; 
+      
       var h=document.createElement('h2'); 
       h.className='almacenTitle'; 
       h.textContent=(a.nombre || a.id || "Almacén"); 
       section.appendChild(h); 
       
-      var grid=document.createElement('div'); 
-      grid.className='grid'; 
-      section.appendChild(grid);
+      // Crear grid horizontal para los tanques de este almacén
+      var tanksGrid=document.createElement('div'); 
+      tanksGrid.className='tanks-grid'; 
+      tanksGrid.style.display = 'grid';
+      tanksGrid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(340px, 1fr))';
+      tanksGrid.style.gap = '16px';
+      tanksGrid.style.padding = '0';
       
-      // Renderizar tanques directamente
+      // Renderizar tanques en el grid horizontal
       a.tanques.forEach(function(t, tIndex){ 
         try {
           console.log(`🛢️ Renderizando tanque ${tIndex + 1}: ${t.nombre}`);
-          var card = upsertCard(a, t, grid);
-          grid.appendChild(card); 
+          var card = upsertCard(a, t, tanksGrid);
+          tanksGrid.appendChild(card); 
           totalTanques++;
         } catch(e) {
           console.error(`❌ Error renderizando tanque ${t.nombre}:`, e);
         }
       }); 
       
+      section.appendChild(tanksGrid);
       gridHost.appendChild(section); 
       __STATE.sectionByAlm.set(a.id||a.nombre||Math.random(), section);
       
@@ -413,8 +421,10 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
 
   function render(){
     try {
+      var gridHost = document.getElementById("grid");
+      
       if(!almacenes.length){ 
-        document.getElementById("grid").innerHTML = ""; 
+        if(gridHost) gridHost.innerHTML = ""; 
         renderTotals(null); 
         document.getElementById("histPanel").hidden=true; 
         return; 
@@ -422,8 +432,15 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
       
       if(window.__showAllMode){ 
         console.log('🎯 Modo "Ver todos" activo - Almacenes:', almacenes.length);
+        
+        // Cambiar modo de grid para "ver todos"
+        if(gridHost) {
+          gridHost.className = "show-all-mode";
+        }
+        
         fastRenderAll(almacenes); 
         document.getElementById("footerInfo").textContent = "Almacenes: "+almacenes.length+" • Activo: todos";
+        
         // Para el modo "todos", calculamos totales globales
         var globalTotals = {tanques: []};
         almacenes.forEach(function(alm){ 
@@ -433,6 +450,12 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
         });
         renderTotals(globalTotals);
         return; 
+      }
+      
+      // Modo almacén individual
+      if(gridHost) {
+        gridHost.className = "";
+        gridHost.style.display = "";
       }
       
       var a = almacenes[idxActivo]; 
