@@ -363,7 +363,75 @@ def home():
 
 @app.route("/api/almacenes")
 def api_almacenes():
-    return jsonify({"ok": True, "almacenes": _almacenes_validos()})
+    """API compatible con frontend - devuelve almacenes con tanques incluidos"""
+    try:
+        latest, by_almacen = _ensure_preloaded()
+        alma_all = _almacenes_all()
+        name_by_key = {a["key"]: a["nombre"] for a in alma_all}
+        canon_by_key = {a["key"]: a["codigo"] for a in alma_all}
+        key_by_canon = {_norm(a["codigo"]): a["key"] for a in alma_all}
+        
+        art = _articulos()
+        tanques = _tanques_all()
+        
+        result = []
+        
+        # Para cada almacén que tiene datos
+        for alma_key, latest_map in by_almacen.items():
+            if not latest_map:  # Skip almacenes sin datos
+                continue
+                
+            canon = canon_by_key.get(alma_key, alma_key)
+            nombre = name_by_key.get(alma_key, "")
+            
+            # Obtener tanques de este almacén
+            tanques_almacen = []
+            for t in tanques:
+                if t["almacen_key"] != alma_key: 
+                    continue
+                    
+                c = latest_map.get(t["tanque"])
+                if not c:
+                    continue
+                    
+                a = art.get(t["articulo"], {"nombre": None, "color": "#CCCCCC"})
+                
+                tanque_data = {
+                    "almacen": canon,
+                    "codigo": t["tanque"],
+                    "id": t["tanque"],
+                    "nombre": t["nombre"],
+                    "articulo": t["articulo"],
+                    "articulo_nombre": a["nombre"],
+                    "capacidad": t["capacidad"],
+                    "nivel": c["volumen"],  # Para compatibilidad con frontend
+                    "volumen": c["volumen"],
+                    "litros15": c["litros15"],
+                    "temperatura": c["temperatura"],
+                    "fecha_ultimo_calado": c["fecha_ultimo_calado"],
+                    "status": "ok",
+                    "spark": [c["volumen"]],
+                    "color": a["color"],
+                    "colorProducto": a["color"],
+                    "colorRGB": a["color"]
+                }
+                tanques_almacen.append(tanque_data)
+            
+            if tanques_almacen:  # Solo incluir almacenes con tanques
+                result.append({
+                    "codigo": canon,
+                    "id": canon, 
+                    "nombre": f"{canon} – {nombre}",
+                    "poblacion": nombre,
+                    "tanques": tanques_almacen
+                })
+        
+        log.info(f"API /api/almacenes: {len(result)} almacenes con tanques")
+        return jsonify(result)
+        
+    except Exception as e:
+        log.error(f"Error en API almacenes: {e}")
+        return jsonify([])
 
 @app.route("/api/tanques_norm")
 def api_tanques_norm():
