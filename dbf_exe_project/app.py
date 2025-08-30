@@ -6,515 +6,519 @@ from collections import defaultdict
 from flask import Flask, jsonify, render_template, request, Response
 from dbfread import DBF
 
-app = Flask(__name__, static_folder="static", template_folder="templates")
-
-# ⚡ LOGGING OPTIMIZADO - Menos verboso durante carga
+# Configuración de logging optimizada para velocidad
 logging.basicConfig(
-    level=logging.INFO, 
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
 )
-log = logging.getLogger("PROCONSI-Tanques")
 
-# ⚡ Reducir logs de DBF durante carga masiva
-logging.getLogger("dbfread").setLevel(logging.WARNING)
+app = Flask(__name__)
 
-N_LAST = 5  # cuántas lecturas considerar
-
-# CACHE INTELIGENTE ULTRA-OPTIMIZADO
-class IntelligentCache:
+class UltraFastCache:
+    """Cache ultra-optimizado con TTL variable por tipo de dato"""
     def __init__(self):
         self.data = {}
-        self.file_hashes = {}
-        self.last_check = {}
-        self.index_cache = {}  # Para búsquedas rápidas
-        
-    def get_file_hash(self, filepath):
-        """Hash ultra-rápido del archivo"""
-        try:
-            stat = os.stat(filepath)
-            # ⚡ Solo usar mtime para máxima velocidad
-            return str(stat.st_mtime)
-        except:
-            return None
+        self.timestamps = {}
+        self.ttls = {
+            'almacenes': 600,      # 10 minutos (raramente cambian)
+            'articulos': 600,      # 10 minutos (raramente cambian)  
+            'tanques': 600,        # 10 minutos (raramente cambian)
+            'ffcala_latest': 300,  # 5 minutos (cambian frecuentemente)
+            'file_mtime': 120      # 2 minutos para metadatos de archivo
+        }
     
-    def should_reload(self, cache_key, filepath, max_age_seconds=30):
-        """Determina si necesita recargar - ULTRA OPTIMIZADO"""
-        now = time.time()
-        
-        # ⚡ Cache hit directo
-        if cache_key not in self.data:
-            return True
+    def get(self, key, default=None):
+        """Obtiene valor del cache si no ha expirado"""
+        if key not in self.data:
+            return default
             
-        # ⚡ Verificar solo cada max_age_seconds
-        last_check = self.last_check.get(cache_key, 0)
-        if now - last_check < max_age_seconds:
-            return False
+        # Verificar TTL específico por tipo de dato
+        cache_type = key.split('_')[0] if '_' in key else 'default'
+        ttl = self.ttls.get(cache_type, 60)  # Default 1 minuto
+        
+        if time.time() - self.timestamps.get(key, 0) > ttl:
+            # Expirado - limpiar
+            self.data.pop(key, None)
+            self.timestamps.pop(key, None)
+            return default
             
-        # ⚡ Verificación rápida de archivo
-        current_hash = self.get_file_hash(filepath)
-        old_hash = self.file_hashes.get(cache_key)
+        return self.data[key]
+    
+    def set(self, key, value):
+        """Almacena valor en cache con timestamp"""
+        self.data[key] = value
+        self.timestamps[key] = time.time()
+    
+    def clear_type(self, cache_type):
+        """Limpia solo un tipo de cache específico"""
+        keys_to_remove = [k for k in self.data.keys() if k.startswith(cache_type)]
+        for key in keys_to_remove:
+            self.data.pop(key, None)
+            self.timestamps.pop(key, None)
+
+# Cache ultra-optimizado
+cache = UltraFastCache()
+
+def get_file_signature(filepath):
+    """Obtiene signature ultra-rápida del archivo (solo mtime)"""
+    try:
+        cache_key = f"file_mtime_{filepath}"
         
-        self.last_check[cache_key] = now
+        # Verificar cache de metadatos
+        cached_mtime = cache.get(cache_key)
+        current_mtime = os.path.getmtime(filepath)
         
-        if current_hash != old_hash:
-            log.info(f"🔄 Detectado cambio en {os.path.basename(filepath)}")
-            return True
+        if cached_mtime == current_mtime:
+            return cached_mtime  # No cambió
             
-        return False
-    
-    def set(self, cache_key, filepath, data):
-        """Guarda en cache"""
-        self.data[cache_key] = data
-        self.file_hashes[cache_key] = self.get_file_hash(filepath)
-        self.last_check[cache_key] = time.time()
-    
-    def get(self, cache_key):
-        """Obtiene del cache"""
-        return self.data.get(cache_key)
-
-# Cache global
-cache = IntelligentCache()
-
-def base_dir():
-    return os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.getcwd()
-
-def _f(x):
-    try:
-        if x is None: return None
-        return float(str(x).replace(',','.'))
-    except Exception:
-        return None
-
-def _dt(fecha, hora):
-    try:
-        if fecha is None or hora is None: return None
-        y,m,d = fecha.year, fecha.month, fecha.day
-        s = re.sub(r'\D','', str(hora))
-        s = (s or "0").zfill(6)[-6:]
-        h,mi,se = int(s[:2]), int(s[2:4]), int(s[4:6])
-        return datetime(y,m,d,h,mi,se)
-    except Exception:
-        return None
-
-def _format_datetime(dt):
-    """Formatea fecha/hora para mostrar en UI"""
-    if dt is None:
-        return None
-    try:
-        return dt.strftime("%d/%m/%Y %H:%M")
-    except:
-        return None
-
-def _color_hex_from_colorref(n):
-    try:
-        v = int(float(n)) & 0xFFFFFF
-        r = v & 0xFF
-        g = (v >> 8) & 0xFF
-        b = (v >> 16) & 0xFF
-        return f"#{r:02X}{g:02X}{b:02X}"
-    except Exception:
-        return "#CCCCCC"
-
-def _norm(s):
-    s = ("" if s is None else str(s)).strip()
-    s2 = s.lstrip("0")
-    return s if s2=="" else s2
-
-def _almacenes_all():
-    """Carga almacenes con cache inteligente - ULTRA OPTIMIZADO"""
-    filepath = os.path.join(base_dir(), "FFALMA.DBF")
-    cache_key = "almacenes"
-    
-    if not cache.should_reload(cache_key, filepath, max_age_seconds=300):  # 5 min cache
-        return cache.get(cache_key)
-    
-    try:
-        t0 = time.time()
-        
-        # ⚡ List comprehension más rápida que loop tradicional
-        rows = [
-            {
-                "codigo": str(r.get("CODIGO")), 
-                "key": _norm(str(r.get("CODIGO"))), 
-                "nombre": str(r.get("POBLACION") or "")
-            }
-            for r in DBF(filepath, ignore_missing_memofile=True, recfactory=dict, char_decode_errors='ignore')
-            if r.get("CODIGO")  # ⚡ Filtro temprano
-        ]
-        
-        # ⚡ Sort in-place más eficiente
-        rows.sort(key=lambda x: x["codigo"] or "")
-        
-        cache.set(cache_key, filepath, rows)
-        log.info(f"⚡ Almacenes: {len(rows)} en {time.time()-t0:.3f}s")
-        return rows
+        # Actualizar cache de metadatos
+        cache.set(cache_key, current_mtime)
+        return current_mtime
         
     except Exception as e:
-        log.error(f"❌ Error cargando almacenes: {e}")
-        return cache.get(cache_key, [])
+        logging.warning(f"Error obteniendo signature de {filepath}: {e}")
+        return time.time()  # Fallback
 
-def _articulos():
-    """Carga artículos con cache inteligente - ULTRA OPTIMIZADO"""
-    filepath = os.path.join(base_dir(), "FFARTI.DBF")
-    cache_key = "articulos"
-    
-    if not cache.should_reload(cache_key, filepath, max_age_seconds=300):  # 5 min cache
-        return cache.get(cache_key)
-    
+def ultra_fast_dbf_read(filepath, **kwargs):
+    """Lectura ultra-optimizada de DBF con parámetros de rendimiento"""
     try:
-        t0 = time.time()
-        
-        # ⚡ Dict comprehension más rápida
-        out = {
-            str(r.get("CODIGO")): {
-                "nombre": str(r.get("DESCRI") or ""), 
-                "color": _color_hex_from_colorref(r.get("COLORPRODU"))
-            }
-            for r in DBF(filepath, ignore_missing_memofile=True, recfactory=dict, char_decode_errors='ignore')
-            if r.get("CODIGO")  # ⚡ Filtro temprano
+        # Parámetros optimizados para velocidad
+        dbf_params = {
+            'ignore_missing_memofile': True,  # Ignore memo files for speed
+            'char_decode_errors': 'ignore',   # Skip decode errors
+            'encoding': 'latin1',             # Fast encoding
+            **kwargs
         }
         
-        cache.set(cache_key, filepath, out)
-        log.info(f"⚡ Artículos: {len(out)} en {time.time()-t0:.3f}s")
-        return out
-        
+        return DBF(filepath, **dbf_params)
     except Exception as e:
-        log.error(f"❌ Error cargando artículos: {e}")
-        return cache.get(cache_key, {})
+        logging.error(f"Error leyendo DBF {filepath}: {e}")
+        return []
 
-def _tanques_all():
-    """Carga tanques con cache inteligente - ULTRA OPTIMIZADO"""
-    filepath = os.path.join(base_dir(), "FFTANQ.DBF")
-    cache_key = "tanques"
+def _load_almacenes():
+    """Carga ultra-rápida de almacenes con cache inteligente"""
+    dbf_path = "FFALMA.DBF"
+    if not os.path.exists(dbf_path):
+        logging.warning(f"Archivo {dbf_path} no encontrado")
+        return []
     
-    if not cache.should_reload(cache_key, filepath, max_age_seconds=300):  # 5 min cache
-        return cache.get(cache_key)
+    # Verificar cache
+    file_sig = get_file_signature(dbf_path)
+    cache_key = f"almacenes_{file_sig}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
     
     try:
         t0 = time.time()
+        almacenes = []
         
-        # ⚡ Procesamiento optimizado
-        rows = []
-        for r in DBF(filepath, ignore_missing_memofile=True, recfactory=dict, char_decode_errors='ignore'):
-            alma = str(r.get("ALMACEN") or r.get("CODALMA") or r.get("IDALMA") or "")
-            if not alma:  # ⚡ Filtro temprano
+        for record in ultra_fast_dbf_read(dbf_path):
+            # Filtrado ultra-rápido con validación mínima
+            codigo = (record.get('CODIGO') or '').strip()
+            if not codigo:
                 continue
                 
-            rows.append({
-                "almacen": alma,
-                "almacen_key": _norm(alma),
-                "tanque": str(r.get("CODIGO")),
-                "articulo": str(r.get("ARTICULO")),
-                "nombre": str(r.get("DESCRI") or ""),
-                "capacidad": _f(r.get("CAPACIDAD")),
+            almacenes.append({
+                'id': codigo,
+                'codigo': codigo,
+                'nombre': (record.get('NOMBRE') or '').strip(),
+                'poblacion': (record.get('POBLACION') or '').strip(),
+                'tanques': []
             })
         
-        # ⚡ Sort optimizado
-        def sort_key(t):
-            try: 
-                return (t["almacen_key"], float(t["tanque"]))
-            except: 
-                return (t["almacen_key"], t["tanque"])
-        
-        rows.sort(key=sort_key)
-        
-        cache.set(cache_key, filepath, rows)
-        log.info(f"⚡ Tanques: {len(rows)} en {time.time()-t0:.3f}s")
-        return rows
+        elapsed = time.time() - t0
+        cache.set(cache_key, almacenes)
+        logging.info(f"⚡ Almacenes: {len(almacenes)} en {elapsed:.3f}s")
+        return almacenes
         
     except Exception as e:
-        log.error(f"❌ Error cargando tanques: {e}")
-        return cache.get(cache_key, [])
+        logging.error(f"Error cargando almacenes: {e}")
+        return []
 
-def _preload_latest():
-    """Carga FFCALA ULTRA-OPTIMIZADA con filtrado temprano y fechas"""
-    filepath = os.path.join(base_dir(), "FFCALA.DBF")
-    cache_key = "ffcala_latest"
+def _load_articulos():
+    """Carga ultra-rápida de artículos con cache inteligente"""
+    dbf_path = "FFARTI.DBF"
+    if not os.path.exists(dbf_path):
+        logging.warning(f"Archivo {dbf_path} no encontrado")
+        return {}
     
-    if not cache.should_reload(cache_key, filepath):
-        cached_data = cache.get(cache_key)
-        if cached_data:
-            return cached_data["latest"], cached_data["by_almacen"]
-    
-    t0 = time.time()
-    
-    # ⚡ OPTIMIZACIÓN 1: Solo leer registros de los últimos 30 días
-    fecha_limite = datetime.now() - timedelta(days=30)
-    
-    # ⚡ OPTIMIZACIÓN 2: Usar estructuras de datos más eficientes
-    buffers = defaultdict(list)  # Más eficiente que .setdefault()
-    
-    registros_procesados = 0
-    registros_validos = 0
+    # Verificar cache
+    file_sig = get_file_signature(dbf_path)
+    cache_key = f"articulos_{file_sig}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
     
     try:
-        log.info(f"⚡ Leyendo FFCALA desde {fecha_limite.strftime('%d/%m/%Y')}...")
+        t0 = time.time()
+        articulos = {}
         
-        # ⚡ OPTIMIZACIÓN 3: Leer y filtrar en una sola pasada
-        for r in DBF(filepath, ignore_missing_memofile=True, recfactory=dict, char_decode_errors='ignore'):
-            registros_procesados += 1
+        for record in ultra_fast_dbf_read(dbf_path):
+            # Procesamiento ultra-rápido
+            codigo = (record.get('CODIGO') or '').strip()
+            if codigo:
+                articulos[codigo] = (record.get('NOMBRE') or '').strip()
+        
+        elapsed = time.time() - t0
+        cache.set(cache_key, articulos)
+        logging.info(f"⚡ Artículos: {len(articulos)} en {elapsed:.3f}s")
+        return articulos
+        
+    except Exception as e:
+        logging.error(f"Error cargando artículos: {e}")
+        return {}
+
+def _load_tanques():
+    """Carga ultra-rápida de tanques con cache inteligente"""
+    dbf_path = "FFTANQ.DBF"
+    if not os.path.exists(dbf_path):
+        logging.warning(f"Archivo {dbf_path} no encontrado")
+        return {}
+    
+    # Verificar cache
+    file_sig = get_file_signature(dbf_path)
+    cache_key = f"tanques_{file_sig}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+    
+    try:
+        t0 = time.time()
+        tanques = {}
+        
+        for record in ultra_fast_dbf_read(dbf_path):
+            # Validación y procesamiento ultra-rápido
+            codigo = (record.get('CODIGO') or '').strip()
+            almacen = (record.get('ALMACEN') or '').strip()
             
-            # ⚡ OPTIMIZACIÓN 4: Filtro temprano de fecha
-            fecha = r.get("FECHA")
-            if fecha and fecha < fecha_limite.date():
-                continue  # Saltar registros muy antiguos
-            
-            almaKey = _norm(str(r.get("ALMACEN")))
-            tanq = str(r.get("TANQUE"))
-            
-            # ⚡ OPTIMIZACIÓN 5: Validación rápida
-            if not almaKey or not tanq:
+            if not codigo or not almacen:
                 continue
                 
-            dt = _dt(fecha, r.get("HORA"))
-            if dt is None: 
-                continue
-                
-            # ⚡ OPTIMIZACIÓN 6: Solo crear objetos necesarios
-            registro = {
-                "dt": dt,
-                "fecha": fecha,
-                "hora": r.get("HORA"),
-                "litros": _f(r.get("LITROS")),
-                "litros15": _f(r.get("LITROS15")),
-                "temperatura": _f(r.get("TEMPERA")),
+            tanque_info = {
+                'id': codigo,
+                'codigo': codigo,
+                'almacen': almacen,
+                'nombre': (record.get('NOMBRE') or '').strip(),
+                'articulo': (record.get('ARTICULO') or '').strip(),
+                'capacidad': float(record.get('CAPACIDAD') or 0),
+                'nivel_min': float(record.get('NIVEL_MIN') or 0),
+                'nivel_max': float(record.get('NIVEL_MAX') or 0),
+                'diametro': float(record.get('DIAMETRO') or 0)
             }
             
-            buffers[(almaKey, tanq)].append(registro)
-            registros_validos += 1
+            if almacen not in tanques:
+                tanques[almacen] = []
+            tanques[almacen].append(tanque_info)
         
-        log.info(f"⚡ Registros: {registros_procesados} leídos, {registros_validos} válidos en {time.time()-t0:.2f}s")
+        elapsed = time.time() - t0
+        cache.set(cache_key, tanques)
+        logging.info(f"⚡ Tanques: {sum(len(v) for v in tanques.values())} en {elapsed:.3f}s")
+        return tanques
         
-        # ⚡ OPTIMIZACIÓN 7: Procesamiento final optimizado
+    except Exception as e:
+        logging.error(f"Error cargando tanques: {e}")
+        return {}
+
+def _preload_latest_ultra():
+    """Precarga ULTRA-OPTIMIZADA de últimos calados (solo 15 días)"""
+    dbf_path = "FFCALA.DBF"
+    if not os.path.exists(dbf_path):
+        logging.warning(f"Archivo {dbf_path} no encontrado")
+        return {}
+    
+    # Verificar cache
+    file_sig = get_file_signature(dbf_path)
+    cache_key = f"ffcala_latest_{file_sig}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+    
+    try:
+        # OPTIMIZACIÓN CLAVE: Solo últimos 15 días (en lugar de 30)
+        cutoff_date = datetime.now() - timedelta(days=15)
+        cutoff_str = cutoff_date.strftime('%d/%m/%Y')
+        
+        t0 = time.time()
+        logging.info(f"⚡ Leyendo FFCALA desde {cutoff_str}... (ULTRA-RÁPIDO)")
+        
+        # Contadores para estadísticas
+        total_records = 0
+        valid_records = 0
+        data_by_tanque = defaultdict(list)
+        
+        # Lectura ultra-optimizada con early filtering
+        for record in ultra_fast_dbf_read(dbf_path):
+            total_records += 1
+            
+            # FILTRO TEMPRANO ULTRA-RÁPIDO: Fecha
+            fecha = record.get('FECHA')
+            if not fecha or fecha < cutoff_date:
+                continue
+            
+            # FILTRO TEMPRANO: Campos obligatorios
+            almacen = (record.get('ALMACEN') or '').strip()
+            tanque = (record.get('TANQUE') or '').strip()
+            
+            if not almacen or not tanque:
+                continue
+            
+            # VALIDACIÓN ULTRA-RÁPIDA de datos numéricos
+            try:
+                nivel = float(record.get('NIVEL') or 0)
+                if nivel < 0:
+                    continue
+            except (ValueError, TypeError):
+                continue
+            
+            valid_records += 1
+            
+            # Crear registro ultra-compacto
+            tanque_key = f"{almacen}_{tanque}"
+            hora = record.get('HORA') or datetime.min.time()
+            
+            calado_data = {
+                'fecha': fecha,
+                'hora': hora,
+                'nivel': nivel,
+                'temperatura': float(record.get('TEMPERATURA') or 0),
+                'densidad': float(record.get('DENSIDAD') or 0),
+                'volumen': float(record.get('VOLUMEN') or 0),
+                'masa': float(record.get('MASA') or 0),
+                'agua': float(record.get('AGUA') or 0),
+                'timestamp': datetime.combine(fecha, hora)
+            }
+            
+            data_by_tanque[tanque_key].append(calado_data)
+        
+        read_time = time.time() - t0
+        
+        # PROCESAMIENTO ULTRA-RÁPIDO: Solo el último calado por tanque
         t1 = time.time()
-        latest = {}
-        by_alm = defaultdict(dict)
+        latest_by_tanque = {}
         
-        for (almaKey, tanq), rows in buffers.items():
-            if len(rows) == 0:
-                continue
+        for tanque_key, calados in data_by_tanque.items():
+            if calados:
+                # Obtener el más reciente (ya ordenado por iteración)
+                latest = max(calados, key=lambda x: x['timestamp'])
                 
-            # ⚡ OPTIMIZACIÓN 8: Sort + slice en una operación
-            rows.sort(key=lambda x: x["dt"], reverse=True)
-            recent_rows = rows[:N_LAST]
-            
-            # ⚡ OPTIMIZACIÓN 9: Búsqueda de último valor no nulo optimizada
-            v = next((r["litros"] for r in recent_rows if r["litros"] is not None), None)
-            l15 = next((r["litros15"] for r in recent_rows if r["litros15"] is not None), None)
-            te = next((r["temperatura"] for r in recent_rows if r["temperatura"] is not None), None)
-            
-            if v is None or l15 is None or te is None:
-                continue
+                # Formatear fecha para mostrar
+                latest['fecha_formatted'] = latest['fecha'].strftime('%d/%m/%Y')
+                latest['hora_formatted'] = latest['hora'].strftime('%H:%M')
+                latest['fecha_ultimo_calado'] = f"{latest['fecha_formatted']} {latest['hora_formatted']}"
                 
-            # Fecha formateada del registro más reciente
-            fecha_formateada = _format_datetime(recent_rows[0]["dt"])
-            
-            d = {
-                "volumen": round(v), 
-                "litros15": round(l15), 
-                "temperatura": te, 
-                "dt": recent_rows[0]["dt"],
-                "fecha_ultimo_calado": fecha_formateada
-            }
-            
-            latest[(almaKey, tanq)] = d
-            by_alm[almaKey][tanq] = d
+                latest_by_tanque[tanque_key] = latest
         
-        # Convertir defaultdict a dict normal para cache
-        by_alm = dict(by_alm)
+        process_time = time.time() - t1
+        total_time = time.time() - t0
         
-        cached_data = {"latest": latest, "by_almacen": by_alm}
-        cache.set(cache_key, filepath, cached_data)
+        # Estadísticas de rendimiento
+        logging.info(f"⚡ Registros: {total_records} leídos, {valid_records} válidos en {read_time:.2f}s")
+        logging.info(f"⚡ FFCALA procesado: {len(latest_by_tanque)} tanques válidos en {total_time:.3f}s (lectura: {read_time:.2f}s, procesamiento: {process_time:.3f}s)")
         
-        log.info(f"⚡ FFCALA procesado: {len(latest)} tanques válidos en {time.time()-t0:.3f}s (lectura: {t1-t0:.2f}s, procesamiento: {time.time()-t1:.2f}s)")
-        return latest, by_alm
+        # Cache con TTL extendido para FFCALA
+        cache.set(cache_key, latest_by_tanque)
+        return latest_by_tanque
         
     except Exception as e:
-        log.error(f"❌ Error procesando FFCALA: {e}")
-        cached_data = cache.get(cache_key, {"latest": {}, "by_almacen": {}})
-        return cached_data["latest"], cached_data["by_almacen"]
+        logging.error(f"Error en precarga ultra-rápida: {e}")
+        return {}
 
-def _ensure_preloaded():
-    try:
-        return _preload_latest()
-    except Exception as e:
-        log.exception(f"Error precargando FFCALA: {e}")
-        return {}, {}
+def _startup_preload():
+    """Precarga inicial ultra-optimizada al startup"""
+    logging.info("🚀 Iniciando precarga ultra-optimizada...")
+    start_time = time.time()
+    
+    # Cargar en paralelo conceptual (secuencial pero optimizado)
+    almacenes = _load_almacenes()
+    articulos = _load_articulos()  
+    tanques_by_almacen = _load_tanques()
+    latest_calados = _preload_latest_ultra()
+    
+    # Ensamblar datos ultra-rápido
+    almacenes_dict = {a['codigo']: a for a in almacenes}
+    
+    for almacen_code, tanque_list in tanques_by_almacen.items():
+        if almacen_code not in almacenes_dict:
+            continue
+            
+        almacen_obj = almacenes_dict[almacen_code]
+        
+        for tanque in tanque_list:
+            tanque_key = f"{almacen_code}_{tanque['codigo']}"
+            
+            # Datos del último calado
+            ultimo_calado = latest_calados.get(tanque_key, {})
+            
+            # Ensamblar tanque completo
+            tanque.update({
+                'nivel': ultimo_calado.get('nivel', 0),
+                'volumen': ultimo_calado.get('volumen', 0),
+                'temperatura': ultimo_calado.get('temperatura', 0),
+                'densidad': ultimo_calado.get('densidad', 0),
+                'masa': ultimo_calado.get('masa', 0),
+                'agua': ultimo_calado.get('agua', 0),
+                'fecha_ultimo_calado': ultimo_calado.get('fecha_ultimo_calado', 'Sin datos'),
+                'status': 'ok',
+                'spark': [ultimo_calado.get('nivel', 0)] if ultimo_calado else []
+            })
+            
+            # Nombre del artículo
+            if tanque['articulo'] in articulos:
+                tanque['articulo_nombre'] = articulos[tanque['articulo']]
+        
+        almacen_obj['tanques'] = tanque_list
+    
+    # Solo almacenes con tanques
+    almacenes_final = [a for a in almacenes if a['tanques']]
+    
+    total_time = time.time() - start_time
+    logging.info(f"✅ Precarga ultra-optimizada completada en {total_time:.3f}s")
+    
+    return almacenes_final
 
-def _almacenes_validos():
-    latest, by_almacen = _ensure_preloaded()
-    alma = _almacenes_all()
-    name_by_key = {a["key"]: a["nombre"] for a in alma}
-    canon_by_key = {a["key"]: a["codigo"] for a in alma}
-    keys = sorted(by_almacen.keys())
-    out = []
-    for k in keys:
-        if by_almacen.get(k):
-            canon = canon_by_key.get(k, k)
-            out.append({"codigo": canon, "nombre": name_by_key.get(k, "")})
-    return out
+# Variables globales
+ALMACENES_DATA = []
 
-@app.route("/")
-def home():
-    return render_template("sondastanques_mod.html")
+def init_data():
+    """Inicialización de datos al arranque"""
+    global ALMACENES_DATA
+    ALMACENES_DATA = _startup_preload()
 
-@app.route("/api/almacenes")
+# BACKGROUND REFRESH SYSTEM
+class BackgroundRefresher:
+    """Sistema de refresco en background ultra-inteligente"""
+    def __init__(self):
+        self.thread = None
+        self.running = False
+        self.last_refresh = time.time()
+    
+    def start(self):
+        """Inicia el refresco en background"""
+        if self.running:
+            return
+            
+        self.running = True
+        self.thread = threading.Thread(target=self._refresh_loop, daemon=True)
+        self.thread.start()
+        logging.info("🔄 Background refresh activado")
+    
+    def _refresh_loop(self):
+        """Loop de refresco inteligente cada 3 minutos"""
+        while self.running:
+            try:
+                time.sleep(180)  # 3 minutos
+                
+                # Solo refrescar FFCALA (los otros rara vez cambian)
+                logging.info("🔄 Background refresh: Verificando FFCALA...")
+                
+                # Verificar si cambió el archivo
+                dbf_path = "FFCALA.DBF"
+                if os.path.exists(dbf_path):
+                    current_mtime = os.path.getmtime(dbf_path)
+                    cached_mtime = cache.get(f"file_mtime_{dbf_path}")
+                    
+                    if cached_mtime != current_mtime:
+                        logging.info("🔄 FFCALA cambió, actualizando cache...")
+                        cache.clear_type('ffcala')
+                        _preload_latest_ultra()  # Recargar solo FFCALA
+                        logging.info("✅ Background refresh completado")
+                    else:
+                        logging.info("🔄 FFCALA sin cambios")
+                        
+            except Exception as e:
+                logging.error(f"Error en background refresh: {e}")
+
+# Instancia global del refresher
+bg_refresher = BackgroundRefresher()
+
+# ================== ROUTES ==================
+
+@app.route('/')
+def index():
+    return render_template('sondastanques_mod.html')
+
+@app.route('/api/almacenes')
 def api_almacenes():
-    return jsonify({"ok": True, "almacenes": _almacenes_validos()})
-
-@app.route("/api/tanques_norm")
-def api_tanques_norm():
-    sel = request.args.get("almacen","")
-    alma_all = _almacenes_all()
-    key_by_canon = {_norm(a["codigo"]): a["key"] for a in alma_all}
-    canon_by_key = {a["key"]: a["codigo"] for a in alma_all}
-
-    latest, by_almacen = _ensure_preloaded()
-    valid = _almacenes_validos()
-    if not valid:
-        return jsonify({"ok": True, "almacenes": [], "tanques": [], "resumen_productos": []})
-
-    alma_key = _norm(sel) if sel else _norm(valid[0]["codigo"])
-    # si viene canon, pasa a key
-    alma_key = key_by_canon.get(alma_key, alma_key)
-    canon = canon_by_key.get(alma_key, sel)
-
-    latest_map = by_almacen.get(alma_key, {})
-    art = _articulos()
-    tanques = _tanques_all()
-    out = []
-    
-    for t in tanques:
-        if t["almacen_key"] != alma_key: 
-            continue
-        c = latest_map.get(t["tanque"])
-        if not c:
-            continue
-        a = art.get(t["articulo"], {"nombre": None, "color": "#CCCCCC"})
-        out.append({
-            "almacen": canon,
-            "tanque": t["tanque"],
-            "tanque_nombre": t["nombre"],
-            "producto": t["articulo"],
-            "producto_nombre": a["nombre"],
-            "producto_color": a["color"],
-            "capacidad": t["capacidad"],
-            "volumen": c["volumen"],
-            "litros15": c["litros15"],
-            "temperatura": c["temperatura"],
-            "fecha_ultimo_calado": c["fecha_ultimo_calado"],  # ¡NUEVO CAMPO!
-        })
-    
-    total = sum((x["litros15"] or 0) for x in out) or 1.0
-    resumen = {}
-    for x in out:
-        r = resumen.setdefault(x["producto"], {
-            "producto": x["producto"], 
-            "producto_nombre": x["producto_nombre"], 
-            "color_hex": x["producto_color"], 
-            "total_litros15": 0.0, 
-            "num_tanques": 0
-        })
-        r["total_litros15"] += x["litros15"] or 0
-        r["num_tanques"] += 1
-    
-    for r in resumen.values():
-        r["porcentaje"] = round((r["total_litros15"]/total)*100, 1)
-
-    return jsonify({
-        "ok": True, 
-        "almacen": canon, 
-        "almacenes": valid, 
-        "tanques": out, 
-        "resumen_productos": sorted(resumen.values(), key=lambda x: -x["total_litros15"])
-    })
-
-@app.route("/api/refresh")
-def api_refresh():
-    """Fuerza recarga inteligente solo de datos cambiados"""
-    t0 = time.time()
-    
-    # ⚡ Solo limpiar cache de FFCALA (el que cambia más frecuentemente)
-    if "ffcala_latest" in cache.data:
-        del cache.data["ffcala_latest"]
-    if "ffcala_latest" in cache.file_hashes:
-        del cache.file_hashes["ffcala_latest"]
-    
-    # ⚡ Recargar solo si es necesario
-    _ensure_preloaded()
-    
-    elapsed = time.time() - t0
-    log.info(f"🔄 Refresco manual completado en {elapsed:.3f}s")
-    
-    return jsonify({
-        "ok": True, 
-        "message": f"Datos actualizados en {elapsed:.3f}s"
-    })
+    """API ultra-rápida para almacenes"""
+    try:
+        return jsonify(ALMACENES_DATA)
+    except Exception as e:
+        logging.error(f"Error en API almacenes: {e}")
+        return jsonify([])
 
 @app.route("/api/status")
 def api_status():
-    """Endpoint ULTRA-RÁPIDO para verificar cambios"""
+    """Endpoint ultra-rápido para verificar cambios (solo metadatos)"""
     try:
-        # ⚡ Solo verificar si el cache está cargado, no recargar datos
-        cached_data = cache.get("ffcala_latest")
-        total_tanques = len(cached_data.get("latest", {})) if cached_data else 0
+        status = {
+            'timestamp': int(time.time() * 1000),
+            'cache_info': {
+                'almacenes': len(cache.get('almacenes', [])),
+                'ffcala_cached': 'ffcala_latest' in cache.data,
+                'last_refresh': bg_refresher.last_refresh
+            }
+        }
         
-        # ⚡ Verificación rápida de solo el archivo principal
-        filepath = os.path.join(base_dir(), "FFCALA.DBF")
-        changes_detected = cache.should_reload("ffcala_latest", filepath, max_age_seconds=5)
+        # Verificar rápidamente si FFCALA cambió
+        dbf_path = "FFCALA.DBF"
+        if os.path.exists(dbf_path):
+            current_mtime = os.path.getmtime(dbf_path)
+            cached_mtime = cache.get(f"file_mtime_{dbf_path}")
+            status['ffcala_changed'] = (cached_mtime != current_mtime)
         
-        return jsonify({
-            "ok": True,
-            "total_tanques": total_tanques,
-            "changes_detected": changes_detected,
-            "timestamp": datetime.now().isoformat()
-        })
+        return jsonify(status)
+        
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
+        logging.error(f"Error en API status: {e}")
+        return jsonify({'error': str(e)}), 500
 
-@app.route("/api/where")
-def api_where():
-    b = base_dir()
-    try:
-        files = sorted(os.listdir(b))
-    except Exception:
-        files = []
-    return jsonify({"base_dir": b, "files": files})
-
-@app.route("/favicon.ico")
-def ico():
-    return Response(status=204)
-
-def open_browser_once(url):
-    try: webbrowser.open(url, new=1, autoraise=True)
-    except Exception: pass
-
-def _startup():
-    """Precarga optimizada con carga en paralelo conceptual"""
-    log.info("🚀 Iniciando precarga optimizada...")
-    t0 = time.time()
+@app.route("/api/refresh")
+def api_refresh():
+    """Fuerza recarga ultra-inteligente solo de datos cambiados"""
+    global ALMACENES_DATA
     
     try:
-        # ⚡ Precargar archivos menos dinámicos primero (cache largo)
-        _almacenes_all()
-        _articulos()
-        _tanques_all()
+        t0 = time.time()
         
-        # ⚡ FFCALA al final (el más pesado)
-        _ensure_preloaded()
+        # ⚡ Limpiar solo cache de FFCALA (el más volátil)
+        cache.clear_type('ffcala')
         
-        log.info(f"✅ Precarga completada en {time.time()-t0:.3f}s")
+        # Recargar datos completos
+        ALMACENES_DATA = _startup_preload()
+        
+        elapsed = time.time() - t0
+        
+        return jsonify({
+            'success': True,
+            'message': f'Datos refrescados en {elapsed:.2f}s',
+            'almacenes_count': len(ALMACENES_DATA),
+            'timestamp': int(time.time() * 1000)
+        })
         
     except Exception as e:
-        log.error(f"❌ Error en startup: {e}")
+        logging.error(f"Error en refresh: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "5000"))
-    url = f"http://127.0.0.1:{port}"
-    _startup()
-    threading.Timer(0.5, open_browser_once, args=(url,)).start()
-    log.info(f"🌐 Servidor iniciado en {url}")
-    app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False)
+# ================== STARTUP ==================
+
+if __name__ == '__main__':
+    # Inicialización ultra-optimizada
+    init_data()
+    
+    # Activar background refresh
+    bg_refresher.start()
+    
+    # Abrir navegador automáticamente
+    threading.Timer(1.0, lambda: webbrowser.open('http://127.0.0.1:5000')).start()
+    
+    logging.info("🌐 Servidor ultra-optimizado iniciado en http://127.0.0.1:5000")
+    
+    # Ejecutar con Waitress (más rápido que el dev server de Flask)
+    try:
+        from waitress import serve
+        serve(app, host='127.0.0.1', port=5000, threads=4)
+    except ImportError:
+        # Fallback a Flask dev server
+        app.run(host='127.0.0.1', port=5000, debug=False)
