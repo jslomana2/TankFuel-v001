@@ -355,17 +355,20 @@
     showAllMode(enabled) {
       console.log('🎯 Modo "Ver todos":', enabled ? 'ACTIVADO' : 'DESACTIVADO');
       
+      // Función para habilitar/deshabilitar controles
+      function setControlsEnabled(flag) {
+        const sel = document.getElementById("almacenSel");
+        const prev = document.getElementById("prevBtn"); 
+        const next = document.getElementById("nextBtn");
+        if (sel) sel.disabled = !flag;
+        if (prev) prev.disabled = !flag;
+        if (next) next.disabled = !flag;
+      }
+      
       if (enabled && allAlmacenesData.length > 0) {
         // Mostrar todos los almacenes
         window.__showAllMode = true;
-        
-        // Deshabilitar controles de navegación
-        const sel = document.getElementById("almacenSel");
-        const prev = document.getElementById("prevBtn");
-        const next = document.getElementById("nextBtn");
-        if (sel) sel.disabled = true;
-        if (prev) prev.disabled = true;
-        if (next) next.disabled = true;
+        setControlsEnabled(false); // Deshabilitar controles de navegación
         
         if (window.setData) {
           window.setData({
@@ -374,23 +377,25 @@
           });
         }
       } else {
-        // Volver a modo normal (solo primer almacén)
+        // Volver a modo normal - MOSTRAR SOLO PRIMER ALMACÉN
         window.__showAllMode = false;
-        
-        // Habilitar controles de navegación
-        const sel = document.getElementById("almacenSel");
-        const prev = document.getElementById("prevBtn");
-        const next = document.getElementById("nextBtn");
-        if (sel) sel.disabled = false;
-        if (prev) prev.disabled = false;
-        if (next) next.disabled = false;
+        setControlsEnabled(true); // Habilitar controles de navegación
         
         if (window.setData && allAlmacenesData.length > 0) {
-          // Mostrar solo el primer almacén en modo individual
+          // Crear un array con solo el primer almacén para modo individual
+          const primerAlmacen = allAlmacenesData[0];
           window.setData({
-            almacenes: [allAlmacenesData[0]], // Solo el primer almacén
-            activoId: allAlmacenesData[0]?.id
+            almacenes: [primerAlmacen], // Solo el primer almacén
+            activoId: primerAlmacen.id
           });
+          
+          // Actualizar el select para mostrar el primer almacén
+          setTimeout(() => {
+            const select = document.getElementById("almacenSel");
+            if (select && select.options.length > 0) {
+              select.selectedIndex = 0;
+            }
+          }, 100);
         }
       }
     }
