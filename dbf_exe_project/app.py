@@ -227,6 +227,23 @@ def load_calados():
             except:
                 hora = datetime.min.time()
             
+            # Debug: mostrar algunos registros para diagnóstico
+            if valid_records <= 5:
+                logging.info(f"Debug registro {valid_records}: Almacén={almacen}, Tanque={tanque}, Fecha={fecha_date}, Hora={hora}")
+                logging.info(f"  VOLUMEN raw: '{record.get('VOLUMEN')}', NIVEL raw: '{record.get('NIVEL')}'")
+                logging.info(f"  TEMPERATURA raw: '{record.get('TEMPERATURA')}', Todos los campos: {list(record.keys())[:10]}")
+            
+            # Procesar campos numéricos con mejor manejo
+            try:
+                volumen = float(record.get('VOLUMEN') or record.get('Litros') or record.get('LITROS') or 0)
+            except:
+                volumen = 0.0
+                
+            try:
+                temperatura = float(record.get('TEMPERATURA') or record.get('Tempera') or 0)
+            except:
+                temperatura = 0.0
+            
             # Crear registro
             tanque_key = f"{almacen}_{tanque}"
             timestamp = datetime.combine(fecha_date, hora)
@@ -235,11 +252,14 @@ def load_calados():
                 'fecha': fecha_date,
                 'hora': hora,
                 'nivel': nivel,
-                'volumen': float(record.get('VOLUMEN') or 0),
-                'temperatura': float(record.get('TEMPERATURA') or 0),
+                'volumen': volumen,
+                'temperatura': temperatura,
                 'timestamp': timestamp,
                 'fecha_ultimo_calado': f"{fecha_date.strftime('%d/%m/%Y')} {hora.strftime('%H:%M')}"
             }
+            
+            if valid_records <= 5:
+                logging.info(f"  Calado procesado: Volumen={volumen}, Nivel={nivel}, Temp={temperatura}")
             
             data_by_tanque[tanque_key].append(calado_data)
         
