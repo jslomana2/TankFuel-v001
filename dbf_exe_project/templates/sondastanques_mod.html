@@ -150,7 +150,6 @@
 <span class="chip"><span class="dot" style="background:var(--bad)"></span> Bajo</span>
 <span class="chip"><span class="dot" style="background:var(--warn)"></span> Medio</span>
 <span class="chip"><span class="dot" style="background:var(--ok)"></span> Alto</span>
-<span class="chip"><span class="dot" style="background:var(--water)"></span> Agua</span>
 </div>
 <div id="footerInfo"></div>
 </footer>
@@ -359,6 +358,15 @@
       if (enabled && allAlmacenesData.length > 0) {
         // Mostrar todos los almacenes
         window.__showAllMode = true;
+        
+        // Deshabilitar controles de navegación
+        const sel = document.getElementById("almacenSel");
+        const prev = document.getElementById("prevBtn");
+        const next = document.getElementById("nextBtn");
+        if (sel) sel.disabled = true;
+        if (prev) prev.disabled = true;
+        if (next) next.disabled = true;
+        
         if (window.setData) {
           window.setData({
             almacenes: allAlmacenesData,
@@ -366,11 +374,21 @@
           });
         }
       } else {
-        // Volver a modo normal
+        // Volver a modo normal (solo primer almacén)
         window.__showAllMode = false;
+        
+        // Habilitar controles de navegación
+        const sel = document.getElementById("almacenSel");
+        const prev = document.getElementById("prevBtn");
+        const next = document.getElementById("nextBtn");
+        if (sel) sel.disabled = false;
+        if (prev) prev.disabled = false;
+        if (next) next.disabled = false;
+        
         if (window.setData && allAlmacenesData.length > 0) {
+          // Mostrar solo el primer almacén en modo individual
           window.setData({
-            almacenes: allAlmacenesData,
+            almacenes: [allAlmacenesData[0]], // Solo el primer almacén
             activoId: allAlmacenesData[0]?.id
           });
         }
