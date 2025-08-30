@@ -36,9 +36,10 @@
   align-items: center;
 }
 .auto-refresh-indicator #autoRefreshStatus {
-  padding: 2px 6px;
+  padding: 4px 8px;
   border-radius: 4px;
   background: rgba(0,0,0,0.05);
+  font-weight: 500;
 }
 
 /* Estilos para modo "Ver todos" con layout horizontal */
@@ -92,7 +93,7 @@
 <header>
 <div class="h-inner">
 <a class="brand" href="https://www.proconsi.com" rel="noopener" target="_blank">
-<img alt="Proconsi" onerror="this.style.display='none'; this.parentNode.insertAdjacentHTML('beforeend','&lt;strong style=&quot;background:#0e1520;color:#fff;padding:4px 8px;border-radius:4px;font-size:12px;&quot;&gt;PROCONSI&lt;/strong&gt;')" src="{{ url_for('static', filename='proconsi.svg') }}"/>
+<img alt="Proconsi" src="{{ url_for('static', filename='proconsi.svg') }}" onerror="this.style.display='none'; this.parentNode.innerHTML='<strong style=&quot;background:#0e1520;color:#fff;padding:4px 8px;border-radius:4px;font-size:12px;&quot;>PROCONSI</strong>'"/>
 </a>
 <div class="title">Tanques · Vista avanzada</div>
 <div class="pill" id="summary">Cargando…</div>
@@ -227,170 +228,133 @@
 <script src="{{ url_for('static', filename='sondastanques_mod.js') }}"></script>
 
 <script>
+// INICIALIZACIÓN CORREGIDA
 (function(){
-  const cache = new Map();
-  let allAlmacenes = [];
-  
-  async function j(u){
+  async function fetchJSON(url) {
+    console.log('🌐 Fetching:', url);
     try {
-      const r = await fetch(u);
-      if(!r.ok) throw new Error(`HTTP ${r.status}`);
-      return r.json();
-    } catch(e) {
-      console.error('Error en petición:', u, e);
-      return {almacenes: [], tanques: []};
+      const response = await fetch(url);
+      if (!response.ok) {
+        console.error('❌ HTTP Error:', response.status, response.statusText);
+        return null;
+      }
+      const data = await response.json();
+      console.log('✅ Data received:', data);
+      return data;
+    } catch (error) {
+      console.error('❌ Fetch error:', error);
+      return null;
     }
   }
-  
-  async function getAlmacenes(){
-    const a = await j('/api/almacenes?n=200');
-    return a.almacenes || [];
-  }
-  
-  async function getTanques(cod){
-    if(cache.has(cod)) return cache.get(cod);
-    
-    const d = await j('/api/tanques_norm?almacen=' + encodeURIComponent(cod) + '&n=5');
-    const tanques = (d.tanques || []).map(t => ({
-      almacen: t.almacen, 
-      nombre: t.tanque_nombre, 
-      producto: t.producto_nombre || t.producto,
-      color: t.producto_color, 
-      colorProducto: t.producto_color, 
-      colorRGB: t.producto_color,
-      capacidad: t.capacidad, 
-      volumen: t.volumen, 
-      temperatura: t.temperatura,
-      fecha_ultimo_calado: t.fecha_ultimo_calado, // ¡NUEVO CAMPO!
-      alturaAgua: 0, 
-      status: 'ok', 
-      spark: []
-    }));
-    
-    // Obtener nombre completo del almacén (código + población)
-    const almacenInfo = (d.almacenes || []).find(a => a.codigo === cod);
-    const nombreCompleto = almacenInfo ? `${cod} – ${almacenInfo.nombre}` : cod;
-    
-    const store = { 
-      id: d.almacen || cod, 
-      nombre: nombreCompleto,
-      tanques 
-    };
-    
-    cache.set(cod, store);
-    return store;
-  }
-  
+
   window.__sondasUI = {
-    async init(){
+    async init() {
       try {
+        console.log('🚀 DOM listo, iniciando carga...');
         console.log('🔄 Iniciando carga de almacenes...');
-        const alms = await getAlmacenes();
-        console.log('📦 Almacenes encontrados:', alms.length);
         
-        if(!alms.length){ 
-          if(window.setData) window.setData({ almacenes:[], activoId:null }); 
-          return; 
+        // Obtener almacenes directamente del API
+        const almacenes = await fetchJSON('/api/almacenes');
+        
+        if (!almacenes || !Array.isArray(almacenes)) {
+          console.error('❌ No se pudieron cargar almacenes o formato incorrecto');
+          return;
         }
         
-        // Cargar TODOS los almacenes de forma secuencial
-        const allStores = [];
-        for(let i = 0; i < alms.length; i++){
-          const a = alms[i];
-          try{ 
-            console.log(`📋 Cargando almacén ${i+1}/${alms.length}: ${a.codigo}`);
-            const store = await getTanques(a.codigo);
-            if(store.tanques && store.tanques.length > 0){
-              allStores.push(store);
-              console.log(`✅ ${a.codigo}: ${store.tanques.length} tanques`);
-            } else {
-              console.log(`⚠️ ${a.codigo}: sin tanques`);
-            }
-          }catch(e){ 
-            console.error('❌ Error cargando almacén', a.codigo, e); 
-          }
+        console.log('📦 Almacenes encontrados:', almacenes.length);
+        
+        if (almacenes.length === 0) {
+          console.warn('⚠️ No hay almacenes disponibles');
+          return;
         }
         
-        console.log(`🎯 Total almacenes con tanques: ${allStores.length}`);
-        allAlmacenes = allStores;
+        // Procesar almacenes para el formato esperado
+        const processedAlmacenes = almacenes.map(alm => {
+          // Convertir estructura del API al formato esperado por el frontend
+          const processed = {
+            id: alm.codigo,
+            nombre: `${alm.codigo} – ${alm.poblacion}`,
+            tanques: (alm.tanques || []).map(tank => ({
+              almacen: tank.almacen,
+              nombre: tank.nombre || `TANQUE ${tank.codigo}`,
+              producto: tank.articulo_nombre || `ART-${tank.articulo}`,
+              color: '#2aa8ff', // Color por defecto
+              colorProducto: '#2aa8ff',
+              colorRGB: '#2aa8ff',
+              capacidad: tank.capacidad,
+              volumen: tank.volumen,
+              temperatura: tank.temperatura,
+              fecha_ultimo_calado: tank.fecha_ultimo_calado,
+              alturaAgua: 0,
+              status: 'ok',
+              spark: [tank.nivel || 0]
+            }))
+          };
+          
+          console.log(`✅ Procesado almacén: ${processed.id} con ${processed.tanques.length} tanques`);
+          return processed;
+        });
         
-        // Establecer datos con todos los almacenes cargados
-        const first = alms[0].codigo;
-        if(window.setData) {
+        console.log('🎯 Total almacenes procesados:', processedAlmacenes.length);
+        
+        // Establecer datos en la UI
+        if (window.setData && typeof window.setData === 'function') {
           console.log('📊 Estableciendo datos en UI...');
-          window.setData({ almacenes: allStores, activoId: first });
+          window.setData({
+            almacenes: processedAlmacenes,
+            activoId: processedAlmacenes[0]?.id
+          });
+          console.log('✨ Carga completada exitosamente');
+        } else {
+          console.error('❌ window.setData no disponible');
         }
         
-        console.log('✨ Carga completada exitosamente');
-        
-      } catch(e) {
-        console.error('💥 Error en inicialización:', e);
+      } catch (error) {
+        console.error('💥 Error en inicialización:', error);
       }
     },
-    
-    async change(cod){
-      if(!cache.has(cod)) await getTanques(cod);
-      if(window.setData) {
-        window.setData({ almacenes: allAlmacenes, activoId: cod });
-      }
+
+    async change(cod) {
+      console.log('🔄 Cambiando a almacén:', cod);
+      // El cambio se maneja automáticamente por el sistema existente
     },
-    
-    // ¡NUEVA FUNCIÓN PARA AUTOREFRESCO!
-    async refreshData(){
+
+    async refreshData() {
       try {
         console.log('🔄 Iniciando refresco de datos...');
         
-        // Limpiar cache para forzar recarga
-        cache.clear();
+        // Recargar datos
+        await this.init();
         
-        // Recargar todos los almacenes
-        const alms = await getAlmacenes();
-        if(!alms.length) return;
+        console.log('✅ Refresco completado');
         
-        const allStores = [];
-        for(const a of alms){
-          try{ 
-            const store = await getTanques(a.codigo);
-            if(store.tanques && store.tanques.length > 0){
-              allStores.push(store);
-            }
-          }catch(e){ 
-            console.error('❌ Error recargando almacén', a.codigo, e); 
-          }
-        }
-        
-        allAlmacenes = allStores;
-        
-        // Mantener almacén activo actual
-        const currentActive = window.setData && window.setData._lastActivoId;
-        
-        if(window.setData) {
-          window.setData({ almacenes: allStores, activoId: currentActive || alms[0].codigo });
-        }
-        
-        console.log('✅ Refresco completado:', allStores.length, 'almacenes');
-        
-        // Actualizar indicador de estado
+        // Actualizar indicador
         const statusEl = document.getElementById('autoRefreshStatus');
-        if(statusEl) {
+        if (statusEl) {
           statusEl.innerHTML = '🟢 Actualizado: ' + new Date().toLocaleTimeString();
         }
         
-      } catch(e) {
-        console.error('❌ Error en refreshData:', e);
+      } catch (error) {
+        console.error('❌ Error en refreshData:', error);
         
         const statusEl = document.getElementById('autoRefreshStatus');
-        if(statusEl) {
+        if (statusEl) {
           statusEl.innerHTML = '🔴 Error al actualizar';
         }
       }
     }
   };
   
-  document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 DOM listo, iniciando carga...');
+  // Inicializar cuando el DOM esté listo
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      console.log('🚀 DOM ready, initializing...');
+      window.__sondasUI.init();
+    });
+  } else {
+    console.log('🚀 DOM already ready, initializing...');
     window.__sondasUI.init();
-  });
+  }
 })();
 </script>
 
