@@ -230,6 +230,8 @@
 <script>
 // INICIALIZACIÓN CORREGIDA
 (function(){
+  var allAlmacenesData = []; // Variable para guardar todos los almacenes
+  
   async function fetchJSON(url) {
     console.log('🌐 Fetching:', url);
     try {
@@ -278,24 +280,30 @@
               almacen: tank.almacen,
               nombre: tank.nombre || `TANQUE ${tank.codigo}`,
               producto: tank.articulo_nombre || `ART-${tank.articulo}`,
-              color: '#2aa8ff', // Color por defecto
-              colorProducto: '#2aa8ff',
-              colorRGB: '#2aa8ff',
+              color: tank.color || tank.colorProducto || tank.colorRGB || '#2aa8ff', // USAR COLOR REAL
+              colorProducto: tank.color || tank.colorProducto || tank.colorRGB || '#2aa8ff',
+              colorRGB: tank.color || tank.colorProducto || tank.colorRGB || '#2aa8ff',
               capacidad: tank.capacidad,
               volumen: tank.volumen,
               temperatura: tank.temperatura,
               fecha_ultimo_calado: tank.fecha_ultimo_calado,
               alturaAgua: 0,
               status: 'ok',
-              spark: [tank.nivel || 0]
+              spark: [tank.nivel || tank.volumen || 0]
             }))
           };
           
           console.log(`✅ Procesado almacén: ${processed.id} con ${processed.tanques.length} tanques`);
+          if (processed.tanques.length > 0) {
+            console.log(`  Primer tanque: ${processed.tanques[0].nombre}, Color: ${processed.tanques[0].color}`);
+          }
           return processed;
         });
         
         console.log('🎯 Total almacenes procesados:', processedAlmacenes.length);
+        
+        // Guardar todos los almacenes para el modo "Ver todos"
+        allAlmacenesData = processedAlmacenes;
         
         // Establecer datos en la UI
         if (window.setData && typeof window.setData === 'function') {
@@ -342,6 +350,31 @@
           statusEl.innerHTML = '🔴 Error al actualizar';
         }
       }
+    },
+
+    // FUNCIÓN PARA MODO "VER TODOS"
+    showAllMode(enabled) {
+      console.log('🎯 Modo "Ver todos":', enabled ? 'ACTIVADO' : 'DESACTIVADO');
+      
+      if (enabled && allAlmacenesData.length > 0) {
+        // Mostrar todos los almacenes
+        window.__showAllMode = true;
+        if (window.setData) {
+          window.setData({
+            almacenes: allAlmacenesData,
+            activoId: null // null significa "todos"
+          });
+        }
+      } else {
+        // Volver a modo normal
+        window.__showAllMode = false;
+        if (window.setData && allAlmacenesData.length > 0) {
+          window.setData({
+            almacenes: allAlmacenesData,
+            activoId: allAlmacenesData[0]?.id
+          });
+        }
+      }
     }
   };
   
@@ -350,10 +383,32 @@
     document.addEventListener('DOMContentLoaded', () => {
       console.log('🚀 DOM ready, initializing...');
       window.__sondasUI.init();
+      
+      // CONECTAR EL CHECKBOX "VER TODOS"
+      setTimeout(() => {
+        const checkbox = document.getElementById('allToggle');
+        if (checkbox) {
+          checkbox.addEventListener('change', (e) => {
+            window.__sondasUI.showAllMode(e.target.checked);
+          });
+          console.log('✅ Checkbox "Ver todos" conectado');
+        }
+      }, 1000);
     });
   } else {
     console.log('🚀 DOM already ready, initializing...');
     window.__sondasUI.init();
+    
+    // CONECTAR EL CHECKBOX "VER TODOS"
+    setTimeout(() => {
+      const checkbox = document.getElementById('allToggle');
+      if (checkbox) {
+        checkbox.addEventListener('change', (e) => {
+          window.__sondasUI.showAllMode(e.target.checked);
+        });
+        console.log('✅ Checkbox "Ver todos" conectado');
+      }
+    }, 1000);
   }
 })();
 </script>
