@@ -2,16 +2,28 @@
 import os, sys, logging, re, threading, webbrowser, time, hashlib, json
 from datetime import datetime, timedelta
 from functools import lru_cache
+from collections import defaultdict
 from flask import Flask, jsonify, render_template, request, Response
 from dbfread import DBF
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+# ⚡ LOGGING OPTIMIZADO - Menos verboso durante carga
+logging.basicConfig(
+    level=logging.INFO, 
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 log = logging.getLogger("PROCONSI-Tanques")
+
+# ⚡ Reducir logs de DBF durante carga masiva
+logging.getLogger("dbfread").setLevel(logging.WARNING)
 
 N_LAST = 5  # cuántas lecturas considerar
 
-# CACHE INTELIGENTE - Solo recarga cuando cambian los archivos
+# CACHE INTELIGENTE ULTRA-OPTIMIZADO
 class IntelligentCache:
     def __init__(self):
         self.data = {}
@@ -20,41 +32,44 @@ class IntelligentCache:
         self.index_cache = {}  # Para búsquedas rápidas
         
     def get_file_hash(self, filepath):
-        """Calcula hash rápido del archivo para detectar cambios"""
+        """Hash ultra-rápido del archivo"""
         try:
             stat = os.stat(filepath)
-            # Usar timestamp + tamaño como hash rápido
-            return f"{stat.st_mtime}_{stat.st_size}"
+            # ⚡ Solo usar mtime para máxima velocidad
+            return str(stat.st_mtime)
         except:
             return None
     
     def should_reload(self, cache_key, filepath, max_age_seconds=30):
-        """Determina si necesita recargar basándose en cambios de archivo"""
+        """Determina si necesita recargar - ULTRA OPTIMIZADO"""
         now = time.time()
         
-        # Verificar si ya existe en cache
+        # ⚡ Cache hit directo
         if cache_key not in self.data:
             return True
             
-        # Verificar antigüedad máxima
-        if now - self.last_check.get(cache_key, 0) > max_age_seconds:
-            current_hash = self.get_file_hash(filepath)
-            old_hash = self.file_hashes.get(cache_key)
+        # ⚡ Verificar solo cada max_age_seconds
+        last_check = self.last_check.get(cache_key, 0)
+        if now - last_check < max_age_seconds:
+            return False
             
-            if current_hash != old_hash:
-                log.info(f"🔄 Detectado cambio en {os.path.basename(filepath)}")
-                return True
-                
-            self.last_check[cache_key] = now
+        # ⚡ Verificación rápida de archivo
+        current_hash = self.get_file_hash(filepath)
+        old_hash = self.file_hashes.get(cache_key)
+        
+        self.last_check[cache_key] = now
+        
+        if current_hash != old_hash:
+            log.info(f"🔄 Detectado cambio en {os.path.basename(filepath)}")
+            return True
             
         return False
     
     def set(self, cache_key, filepath, data):
-        """Guarda en cache con hash del archivo"""
+        """Guarda en cache"""
         self.data[cache_key] = data
         self.file_hashes[cache_key] = self.get_file_hash(filepath)
         self.last_check[cache_key] = time.time()
-        log.debug(f"💾 Cache actualizado: {cache_key}")
     
     def get(self, cache_key):
         """Obtiene del cache"""
@@ -109,74 +124,86 @@ def _norm(s):
     return s if s2=="" else s2
 
 def _almacenes_all():
-    """Carga almacenes con cache inteligente"""
+    """Carga almacenes con cache inteligente - ULTRA OPTIMIZADO"""
     filepath = os.path.join(base_dir(), "FFALMA.DBF")
     cache_key = "almacenes"
     
-    if not cache.should_reload(cache_key, filepath):
+    if not cache.should_reload(cache_key, filepath, max_age_seconds=300):  # 5 min cache
         return cache.get(cache_key)
     
     try:
         t0 = time.time()
-        rows = list(DBF(filepath, ignore_missing_memofile=True, recfactory=dict, char_decode_errors='ignore'))
-        out = []
-        for r in rows:
-            codigo = str(r.get("CODIGO"))
-            out.append({
-                "codigo": codigo, 
-                "key": _norm(codigo), 
-                "nombre": str(r.get("POBLACION") or "")
-            })
-        out.sort(key=lambda x: x["codigo"] or "")
         
-        cache.set(cache_key, filepath, out)
-        log.info(f"⚡ Almacenes cargados: {len(out)} en {time.time()-t0:.3f}s")
-        return out
+        # ⚡ List comprehension más rápida que loop tradicional
+        rows = [
+            {
+                "codigo": str(r.get("CODIGO")), 
+                "key": _norm(str(r.get("CODIGO"))), 
+                "nombre": str(r.get("POBLACION") or "")
+            }
+            for r in DBF(filepath, ignore_missing_memofile=True, recfactory=dict, char_decode_errors='ignore')
+            if r.get("CODIGO")  # ⚡ Filtro temprano
+        ]
+        
+        # ⚡ Sort in-place más eficiente
+        rows.sort(key=lambda x: x["codigo"] or "")
+        
+        cache.set(cache_key, filepath, rows)
+        log.info(f"⚡ Almacenes: {len(rows)} en {time.time()-t0:.3f}s")
+        return rows
+        
     except Exception as e:
         log.error(f"❌ Error cargando almacenes: {e}")
         return cache.get(cache_key, [])
 
 def _articulos():
-    """Carga artículos con cache inteligente"""
+    """Carga artículos con cache inteligente - ULTRA OPTIMIZADO"""
     filepath = os.path.join(base_dir(), "FFARTI.DBF")
     cache_key = "articulos"
     
-    if not cache.should_reload(cache_key, filepath):
+    if not cache.should_reload(cache_key, filepath, max_age_seconds=300):  # 5 min cache
         return cache.get(cache_key)
     
     try:
         t0 = time.time()
-        rows = list(DBF(filepath, ignore_missing_memofile=True, recfactory=dict, char_decode_errors='ignore'))
-        out = {}
-        for r in rows:
-            cod = str(r.get("CODIGO"))
-            out[cod] = {
+        
+        # ⚡ Dict comprehension más rápida
+        out = {
+            str(r.get("CODIGO")): {
                 "nombre": str(r.get("DESCRI") or ""), 
                 "color": _color_hex_from_colorref(r.get("COLORPRODU"))
             }
+            for r in DBF(filepath, ignore_missing_memofile=True, recfactory=dict, char_decode_errors='ignore')
+            if r.get("CODIGO")  # ⚡ Filtro temprano
+        }
         
         cache.set(cache_key, filepath, out)
-        log.info(f"⚡ Artículos cargados: {len(out)} en {time.time()-t0:.3f}s")
+        log.info(f"⚡ Artículos: {len(out)} en {time.time()-t0:.3f}s")
         return out
+        
     except Exception as e:
         log.error(f"❌ Error cargando artículos: {e}")
         return cache.get(cache_key, {})
 
 def _tanques_all():
-    """Carga tanques con cache inteligente"""
+    """Carga tanques con cache inteligente - ULTRA OPTIMIZADO"""
     filepath = os.path.join(base_dir(), "FFTANQ.DBF")
     cache_key = "tanques"
     
-    if not cache.should_reload(cache_key, filepath):
+    if not cache.should_reload(cache_key, filepath, max_age_seconds=300):  # 5 min cache
         return cache.get(cache_key)
     
     try:
         t0 = time.time()
-        rows = list(DBF(filepath, ignore_missing_memofile=True, recfactory=dict, char_decode_errors='ignore'))
-        out = []
-        for r in rows:
+        
+        # ⚡ Procesamiento optimizado
+        rows = []
+        for r in DBF(filepath, ignore_missing_memofile=True, recfactory=dict, char_decode_errors='ignore'):
             alma = str(r.get("ALMACEN") or r.get("CODALMA") or r.get("IDALMA") or "")
-            out.append({
+            if not alma:  # ⚡ Filtro temprano
+                continue
+                
+            rows.append({
                 "almacen": alma,
                 "almacen_key": _norm(alma),
                 "tanque": str(r.get("CODIGO")),
@@ -184,27 +211,26 @@ def _tanques_all():
                 "nombre": str(r.get("DESCRI") or ""),
                 "capacidad": _f(r.get("CAPACIDAD")),
             })
-        def k(t):
-            try: return (t["almacen_key"], float(t["tanque"]))
-            except Exception: return (t["almacen_key"], t["tanque"])
-        out.sort(key=k)
         
-        cache.set(cache_key, filepath, out)
-        log.info(f"⚡ Tanques cargados: {len(out)} en {time.time()-t0:.3f}s")
-        return out
+        # ⚡ Sort optimizado
+        def sort_key(t):
+            try: 
+                return (t["almacen_key"], float(t["tanque"]))
+            except: 
+                return (t["almacen_key"], t["tanque"])
+        
+        rows.sort(key=sort_key)
+        
+        cache.set(cache_key, filepath, rows)
+        log.info(f"⚡ Tanques: {len(rows)} en {time.time()-t0:.3f}s")
+        return rows
+        
     except Exception as e:
         log.error(f"❌ Error cargando tanques: {e}")
         return cache.get(cache_key, [])
 
-def _last_non_null(vals):
-    for v in vals:
-        if v is None: continue
-        if isinstance(v, str) and not v.strip(): continue
-        return v
-    return None
-
 def _preload_latest():
-    """Carga FFCALA con cache inteligente y fechas de último calado"""
+    """Carga FFCALA ULTRA-OPTIMIZADA con filtrado temprano y fechas"""
     filepath = os.path.join(base_dir(), "FFCALA.DBF")
     cache_key = "ffcala_latest"
     
@@ -214,60 +240,96 @@ def _preload_latest():
             return cached_data["latest"], cached_data["by_almacen"]
     
     t0 = time.time()
-    buffers = {}  # (almaKey, tanque) -> list rows
+    
+    # ⚡ OPTIMIZACIÓN 1: Solo leer registros de los últimos 30 días
+    fecha_limite = datetime.now() - timedelta(days=30)
+    
+    # ⚡ OPTIMIZACIÓN 2: Usar estructuras de datos más eficientes
+    buffers = defaultdict(list)  # Más eficiente que .setdefault()
+    
+    registros_procesados = 0
+    registros_validos = 0
     
     try:
+        log.info(f"⚡ Leyendo FFCALA desde {fecha_limite.strftime('%d/%m/%Y')}...")
+        
+        # ⚡ OPTIMIZACIÓN 3: Leer y filtrar en una sola pasada
         for r in DBF(filepath, ignore_missing_memofile=True, recfactory=dict, char_decode_errors='ignore'):
+            registros_procesados += 1
+            
+            # ⚡ OPTIMIZACIÓN 4: Filtro temprano de fecha
+            fecha = r.get("FECHA")
+            if fecha and fecha < fecha_limite.date():
+                continue  # Saltar registros muy antiguos
+            
             almaKey = _norm(str(r.get("ALMACEN")))
             tanq = str(r.get("TANQUE"))
-            dt = _dt(r.get("FECHA"), r.get("HORA"))
+            
+            # ⚡ OPTIMIZACIÓN 5: Validación rápida
+            if not almaKey or not tanq:
+                continue
+                
+            dt = _dt(fecha, r.get("HORA"))
             if dt is None: 
                 continue
-            lst = buffers.setdefault((almaKey, tanq), [])
-            lst.append({
+                
+            # ⚡ OPTIMIZACIÓN 6: Solo crear objetos necesarios
+            registro = {
                 "dt": dt,
-                "fecha": r.get("FECHA"),
+                "fecha": fecha,
                 "hora": r.get("HORA"),
                 "litros": _f(r.get("LITROS")),
                 "litros15": _f(r.get("LITROS15")),
                 "temperatura": _f(r.get("TEMPERA")),
-            })
-        
-        latest = {}
-        by_alm = {}
-        
-        for key, rows in buffers.items():
-            rows.sort(key=lambda x:x["dt"], reverse=True)
-            rows = rows[:N_LAST]
+            }
             
-            v = _last_non_null([r["litros"] for r in rows])
-            l15 = _last_non_null([r["litros15"] for r in rows])
-            te = _last_non_null([r["temperatura"] for r in rows])
+            buffers[(almaKey, tanq)].append(registro)
+            registros_validos += 1
+        
+        log.info(f"⚡ Registros: {registros_procesados} leídos, {registros_validos} válidos en {time.time()-t0:.2f}s")
+        
+        # ⚡ OPTIMIZACIÓN 7: Procesamiento final optimizado
+        t1 = time.time()
+        latest = {}
+        by_alm = defaultdict(dict)
+        
+        for (almaKey, tanq), rows in buffers.items():
+            if len(rows) == 0:
+                continue
+                
+            # ⚡ OPTIMIZACIÓN 8: Sort + slice en una operación
+            rows.sort(key=lambda x: x["dt"], reverse=True)
+            recent_rows = rows[:N_LAST]
+            
+            # ⚡ OPTIMIZACIÓN 9: Búsqueda de último valor no nulo optimizada
+            v = next((r["litros"] for r in recent_rows if r["litros"] is not None), None)
+            l15 = next((r["litros15"] for r in recent_rows if r["litros15"] is not None), None)
+            te = next((r["temperatura"] for r in recent_rows if r["temperatura"] is not None), None)
             
             if v is None or l15 is None or te is None:
                 continue
                 
-            almaKey, tanq = key
-            
-            # Obtener la fecha/hora del registro más reciente
-            ultimo_registro = rows[0]
-            fecha_formateada = _format_datetime(ultimo_registro["dt"])
+            # Fecha formateada del registro más reciente
+            fecha_formateada = _format_datetime(recent_rows[0]["dt"])
             
             d = {
                 "volumen": round(v), 
                 "litros15": round(l15), 
                 "temperatura": te, 
-                "dt": ultimo_registro["dt"],
-                "fecha_ultimo_calado": fecha_formateada  # ¡NUEVO CAMPO!
+                "dt": recent_rows[0]["dt"],
+                "fecha_ultimo_calado": fecha_formateada
             }
             
-            latest[key] = d
-            by_alm.setdefault(almaKey, {})[tanq] = d
+            latest[(almaKey, tanq)] = d
+            by_alm[almaKey][tanq] = d
+        
+        # Convertir defaultdict a dict normal para cache
+        by_alm = dict(by_alm)
         
         cached_data = {"latest": latest, "by_almacen": by_alm}
         cache.set(cache_key, filepath, cached_data)
         
-        log.info(f"⚡ FFCALA procesado: {len(latest)} tanques válidos en {time.time()-t0:.3f}s")
+        log.info(f"⚡ FFCALA procesado: {len(latest)} tanques válidos en {time.time()-t0:.3f}s (lectura: {t1-t0:.2f}s, procesamiento: {time.time()-t1:.2f}s)")
         return latest, by_alm
         
     except Exception as e:
@@ -372,30 +434,37 @@ def api_tanques_norm():
 
 @app.route("/api/refresh")
 def api_refresh():
-    # Fuerza recarga limpiando todo el cache
-    cache.data.clear()
-    cache.file_hashes.clear()
-    cache.last_check.clear()
-    log.info("🔄 Cache completamente limpiado")
-    return jsonify({"ok": True, "message": "Cache limpiado"})
+    """Fuerza recarga inteligente solo de datos cambiados"""
+    t0 = time.time()
+    
+    # ⚡ Solo limpiar cache de FFCALA (el que cambia más frecuentemente)
+    if "ffcala_latest" in cache.data:
+        del cache.data["ffcala_latest"]
+    if "ffcala_latest" in cache.file_hashes:
+        del cache.file_hashes["ffcala_latest"]
+    
+    # ⚡ Recargar solo si es necesario
+    _ensure_preloaded()
+    
+    elapsed = time.time() - t0
+    log.info(f"🔄 Refresco manual completado en {elapsed:.3f}s")
+    
+    return jsonify({
+        "ok": True, 
+        "message": f"Datos actualizados en {elapsed:.3f}s"
+    })
 
 @app.route("/api/status")
 def api_status():
-    """Endpoint para verificar si hay cambios sin recargar datos"""
+    """Endpoint ULTRA-RÁPIDO para verificar cambios"""
     try:
-        latest, by_almacen = _ensure_preloaded()
-        total_tanques = len(latest)
+        # ⚡ Solo verificar si el cache está cargado, no recargar datos
+        cached_data = cache.get("ffcala_latest")
+        total_tanques = len(cached_data.get("latest", {})) if cached_data else 0
         
-        # Verificar si hay archivos más nuevos
-        files_to_check = ["FFCALA.DBF", "FFALMA.DBF", "FFARTI.DBF", "FFTANQ.DBF"]
-        changes_detected = False
-        
-        for filename in files_to_check:
-            filepath = os.path.join(base_dir(), filename)
-            cache_key = filename.lower().replace('.dbf', '')
-            if cache.should_reload(cache_key, filepath, max_age_seconds=5):
-                changes_detected = True
-                break
+        # ⚡ Verificación rápida de solo el archivo principal
+        filepath = os.path.join(base_dir(), "FFCALA.DBF")
+        changes_detected = cache.should_reload("ffcala_latest", filepath, max_age_seconds=5)
         
         return jsonify({
             "ok": True,
@@ -424,10 +493,23 @@ def open_browser_once(url):
     except Exception: pass
 
 def _startup():
-    # precarga ANTES de abrir navegador para que la primera carga sea instantánea
-    log.info("🚀 Iniciando precarga de datos...")
-    _ensure_preloaded()
-    log.info("✅ Precarga completada")
+    """Precarga optimizada con carga en paralelo conceptual"""
+    log.info("🚀 Iniciando precarga optimizada...")
+    t0 = time.time()
+    
+    try:
+        # ⚡ Precargar archivos menos dinámicos primero (cache largo)
+        _almacenes_all()
+        _articulos()
+        _tanques_all()
+        
+        # ⚡ FFCALA al final (el más pesado)
+        _ensure_preloaded()
+        
+        log.info(f"✅ Precarga completada en {time.time()-t0:.3f}s")
+        
+    except Exception as e:
+        log.error(f"❌ Error en startup: {e}")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5000"))
