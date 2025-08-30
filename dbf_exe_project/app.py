@@ -254,7 +254,18 @@ def _preload_latest_ultra():
             
             # FILTRO TEMPRANO ULTRA-RÁPIDO: Fecha
             fecha = record.get('FECHA')
-            if not fecha or fecha < cutoff_date:
+            if not fecha:
+                continue
+                
+            # Manejar diferentes tipos de fecha
+            if isinstance(fecha, datetime):
+                fecha_compare = fecha.date()
+            elif hasattr(fecha, 'date'):
+                fecha_compare = fecha.date()
+            else:
+                fecha_compare = fecha
+                
+            if fecha_compare < cutoff_date.date():
                 continue
             
             # FILTRO TEMPRANO: Campos obligatorios
