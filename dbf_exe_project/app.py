@@ -287,10 +287,34 @@ def _preload_latest_ultra():
             
             # Crear registro ultra-compacto
             tanque_key = f"{almacen}_{tanque}"
-            hora = record.get('HORA') or datetime.min.time()
+            
+            # Manejar hora correctamente
+            hora_raw = record.get('HORA')
+            if isinstance(hora_raw, str):
+                try:
+                    hora = datetime.strptime(hora_raw, '%H:%M:%S').time()
+                except:
+                    try:
+                        hora = datetime.strptime(hora_raw, '%H:%M').time()
+                    except:
+                        hora = datetime.min.time()
+            elif hasattr(hora_raw, 'time'):
+                hora = hora_raw.time()
+            elif isinstance(hora_raw, type(datetime.min.time())):
+                hora = hora_raw
+            else:
+                hora = datetime.min.time()
+            
+            # Manejar fecha para timestamp
+            if isinstance(fecha, datetime):
+                fecha_for_combine = fecha.date()
+            elif hasattr(fecha, 'date'):
+                fecha_for_combine = fecha.date()
+            else:
+                fecha_for_combine = fecha
             
             calado_data = {
-                'fecha': fecha,
+                'fecha': fecha_for_combine,
                 'hora': hora,
                 'nivel': nivel,
                 'temperatura': float(record.get('TEMPERATURA') or 0),
@@ -298,7 +322,7 @@ def _preload_latest_ultra():
                 'volumen': float(record.get('VOLUMEN') or 0),
                 'masa': float(record.get('MASA') or 0),
                 'agua': float(record.get('AGUA') or 0),
-                'timestamp': datetime.combine(fecha, hora)
+                'timestamp': datetime.combine(fecha_for_combine, hora)
             }
             
             data_by_tanque[tanque_key].append(calado_data)
