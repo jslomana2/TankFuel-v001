@@ -74,72 +74,180 @@
 var __STATE = { lastKey:null, cardsByKey:new Map(), sectionByAlm:new Map(), pendingFrame:0, lastRenderAt:0, refreshing:false };
 function hashKey(obj){ try{ var s=JSON.stringify(obj,function(k,v){ if(v&&typeof v==='object'){ if('spark'in v){ var c=Object.assign({},v); delete c.spark; return c; } } return v;}); var h=5381; for(var i=0;i<s.length;i++) h=((h<<5)+h)+s.charCodeAt(i); return (h>>>0).toString(16);}catch(_){return String(Math.random());} }
 function keyForTank(a,t){ return (a.id!=null?a.id:a.nombre||'A') + '|' + (t.id_tanque||t.codigo||t.nombre||Math.random()); }
+
+// FUNCIÓN upsertCard 3D ULTRA MEJORADA
 function upsertCard(a,t,grid){
   try {
-    var key=keyForTank(a,t); var ref=__STATE.cardsByKey.get(key);
-    var col=colorFrom(t.color||t.colorProducto||t.colorRGB); var colLight=shade(col,+0.24);
+    var key=keyForTank(a,t); 
+    var ref=__STATE.cardsByKey.get(key);
+    var col=colorFrom(t.color||t.colorProducto||t.colorRGB); 
+    var colLight=shade(col,+0.35); // Más brillo para efectos 3D
     var pct=(t.capacidad>0)? percent((t.volumen/t.capacidad)*100):0;
-    var nivel = nivelFromPct(pct); var colorNivel = nivelColorFromPct(pct);
+    var nivel = nivelFromPct(pct); 
+    var colorNivel = nivelColorFromPct(pct);
+    
     if(!ref){
-      var card=document.createElement("div"); card.className="card";
-      var tankWrap=document.createElement("div"); tankWrap.className="tankWrap";
-      var tank=document.createElement("div"); tank.className="tank";
-      var liquid=document.createElement("div"); liquid.className="liquid";
-      liquid.style.setProperty("--fill",col); liquid.style.setProperty("--fillLight",colLight);
-      var w1=document.createElement("div"); w1.className="wave"; var w2=document.createElement("div"); w2.className="wave wave2"; var w3=document.createElement("div"); w3.className="wave wave3";
+      var card=document.createElement("div"); 
+      card.className="card";
+      
+      var tankWrap=document.createElement("div"); 
+      tankWrap.className="tankWrap";
+      
+      var tank=document.createElement("div"); 
+      tank.className="tank";
+      
+      var liquid=document.createElement("div"); 
+      liquid.className="liquid";
+      liquid.style.setProperty("--fill",col); 
+      liquid.style.setProperty("--fillLight",colLight);
+      
+      // Ondas 3D mejoradas con efectos más realistas
+      var w1=document.createElement("div"); w1.className="wave";
+      var w2=document.createElement("div"); w2.className="wave wave2";
+      var w3=document.createElement("div"); w3.className="wave wave3";
       liquid.appendChild(w1); liquid.appendChild(w2); liquid.appendChild(w3);
-      var gloss=document.createElement("div"); gloss.className="gloss"; tank.appendChild(gloss);
-      var stripe=document.createElement("div"); stripe.className="stripe"; tank.appendChild(stripe);
-      tank.appendChild(liquid); makeScale(tankWrap); tankWrap.appendChild(tank);
-      var pctLabel=document.createElement("div"); pctLabel.className="pct"; tankWrap.appendChild(pctLabel);
+      
+      // Efectos de superficie mejorados
+      var gloss=document.createElement("div"); gloss.className="gloss"; 
+      tank.appendChild(gloss);
+      
+      var stripe=document.createElement("div"); stripe.className="stripe"; 
+      tank.appendChild(stripe);
+      
+      tank.appendChild(liquid); 
+      makeScaleEnhanced(tankWrap); 
+      tankWrap.appendChild(tank);
+      
+      var pctLabel=document.createElement("div"); pctLabel.className="pct"; 
+      tankWrap.appendChild(pctLabel);
+      
       var info=document.createElement("div");
-      var r1=document.createElement("div"); r1.style.display="flex"; r1.style.alignItems="center"; r1.style.justifyContent="space-between"; r1.style.margin="4px 0";
+      
+      var r1=document.createElement("div"); 
+      r1.style.display="flex"; 
+      r1.style.alignItems="center"; 
+      r1.style.justifyContent="space-between"; 
+      r1.style.margin="4px 0 8px 0";
+      
       var nm=document.createElement("div"); nm.className="name";
-      var st=document.createElement("div"); st.className="status"; var dt=document.createElement("span"); dt.className="dot"; var stx=document.createElement("span"); st.appendChild(dt); st.appendChild(stx);
-        /*__WARN_INSERT_CREATION__*/
-        if(pct <= 20){ dt.className="warnIcon"; dt.textContent="⚠"; dt.style.color="#ef4444"; dt.style.background="transparent"; }
-        else { dt.className="dot"; dt.textContent=""; dt.style.background=nivelColorFromPct(pct); }
-
-      r1.appendChild(nm); r1.appendChild(st); info.appendChild(r1);
-      var c=document.createElement("canvas"); c.className="spark"; info.appendChild(c);
-      var kv=document.createElement("div"); kv.className="kv"; info.appendChild(kv);
-      card.appendChild(tankWrap); card.appendChild(info);
-      card.onclick=function(){ var cards=document.querySelectorAll(".card"); for(var i=0;i<cards.length;i++) cards[i].classList.remove("sel"); card.classList.add("sel"); renderHistory(t); };
-      ref={el:card, parts:{liquid,pctLabel,nm,dt,stx,kv,spark:c}, last:{pct:-1,volumen:-1,capacidad:-1,nombre:null,nivel:null,color:null,fecha:null}};
+      
+      var st=document.createElement("div"); st.className="status"; 
+      var dt=document.createElement("span"); dt.className="dot"; 
+      var stx=document.createElement("span"); 
+      st.appendChild(dt); st.appendChild(stx);
+      
+      r1.appendChild(nm); r1.appendChild(st); 
+      info.appendChild(r1);
+      
+      var c=document.createElement("canvas"); c.className="spark"; 
+      info.appendChild(c);
+      
+      var kv=document.createElement("div"); kv.className="kv"; 
+      info.appendChild(kv);
+      
+      card.appendChild(tankWrap); 
+      card.appendChild(info);
+      
+      // Efectos de hover 3D avanzados
+      card.addEventListener('mouseenter', function() {
+        addParallaxEffect(card);
+      });
+      
+      card.addEventListener('mouseleave', function() {
+        removeParallaxEffect(card);
+      });
+      
+      card.onclick=function(){ 
+        var cards=document.querySelectorAll(".card"); 
+        for(var i=0;i<cards.length;i++) cards[i].classList.remove("sel"); 
+        card.classList.add("sel");
+        addSelectionEffect(card);
+        renderHistory(t); 
+      };
+      
+      ref={
+        el:card, 
+        parts:{liquid,pctLabel,nm,dt,stx,kv,spark:c}, 
+        last:{pct:-1,volumen:-1,capacidad:-1,nombre:null,nivel:null,color:null,fecha:null}
+      };
+      
       __STATE.cardsByKey.set(key, ref);
     }
+    
     var p=ref.parts;
-    if(ref.last.color!==col){ p.liquid.style.setProperty("--fill",col); p.liquid.style.setProperty("--fillLight",colLight); ref.last.color=col; }
-    if(ref.last.pct!==pct){ p.liquid.style.height=pct+"%"; p.pctLabel.textContent=percentFmt(pct); ref.last.pct=pct; }
-    var nombre=(t.nombre||"TANQUE"); if(ref.last.nombre!==nombre){ p.nm.textContent=nombre; ref.last.nombre=nombre; }
-    if(ref.last.nivel!==nivel){ p.dt.style.background=colorNivel; p.stx.textContent=nivel;
-      /*__WARN_INSERT_UPDATE__*/
-      if(pct <= 20){ p.dt.className="warnIcon"; p.dt.textContent="⚠"; p.dt.style.color="#ef4444"; p.dt.style.background="transparent"; }
-      else { p.dt.className="dot"; p.dt.textContent=""; p.dt.style.background=colorNivel; }
-      ref.last.nivel=nivel; }
+    
+    // Actualizar color con transición suave
+    if(ref.last.color!==col){ 
+      p.liquid.style.setProperty("--fill",col); 
+      p.liquid.style.setProperty("--fillLight",colLight); 
+      ref.last.color=col; 
+      
+      // Efecto de brillo al cambiar color
+      addColorChangeEffect(p.liquid, col);
+    }
+    
+    // Actualizar porcentaje con animación fluida
+    if(ref.last.pct!==pct){ 
+      animateLiquidLevel(p.liquid, ref.last.pct, pct);
+      p.pctLabel.textContent=percentFmt(pct); 
+      ref.last.pct=pct; 
+    }
+    
+    var nombre=(t.nombre||"TANQUE"); 
+    if(ref.last.nombre!==nombre){ 
+      p.nm.textContent=nombre; 
+      ref.last.nombre=nombre; 
+    }
+    
+    // Estado con efectos 3D mejorados
+    if(ref.last.nivel!==nivel){ 
+      if(pct <= 20){ 
+        p.dt.className="warnIcon"; 
+        p.dt.textContent="⚠"; 
+        p.dt.style.color="#ef4444"; 
+        p.dt.style.background="transparent";
+        addPulseEffect(p.dt);
+      } else { 
+        p.dt.className="dot"; 
+        p.dt.textContent=""; 
+        p.dt.style.background=colorNivel;
+        addGlowEffect(p.dt, colorNivel);
+      }
+      p.stx.textContent=nivel;
+      ref.last.nivel=nivel; 
+    }
+    
+    // Actualizar información con efectos de transición
     if(ref.last.volumen!==(t.volumen||0) || ref.last.capacidad!==(t.capacidad||0) || ref.last.fecha!==(t.fecha_ultimo_calado||'')){
       var ullage=(t.capacidad||0)-(t.volumen||0);
-      // CAMBIO PRINCIPAL: Mostrar fecha en lugar de agua con color azul
       var fechaDisplay = t.fecha_ultimo_calado || '-';
-      p.kv.innerHTML="<div>Volumen</div><div><strong>"+litersLabel(t.volumen||0)+"</strong></div>"
-                    +"<div>Capacidad</div><div>"+litersLabel(t.capacidad||0)+"</div>"
-                    +"<div>Disponible</div><div>"+litersLabel(ullage)+"</div>"
-                    +"<div>Producto</div><div>"+(t.producto||"-")+"</div>"
-                    +"<div>Temp.</div><div>"+(t.temperatura!=null?t.temperatura.toFixed(1)+' °C':'-')+"</div>"
-                    +"<div>Fecha</div><div style='color:#2aa8ff;font-weight:600'>"+fechaDisplay+"</div>";
-      ref.last.volumen=(t.volumen||0); ref.last.capacidad=(t.capacidad||0); ref.last.fecha=(t.fecha_ultimo_calado||'');
+      
+      p.kv.innerHTML=
+        "<div>Volumen</div><div><strong>"+litersLabel(t.volumen||0)+"</strong></div>"+
+        "<div>Capacidad</div><div>"+litersLabel(t.capacidad||0)+"</div>"+
+        "<div>Disponible</div><div>"+litersLabel(ullage)+"</div>"+
+        "<div>Producto</div><div>"+(t.producto||"-")+"</div>"+
+        "<div>Temp.</div><div>"+(t.temperatura!=null?t.temperatura.toFixed(1)+' °C':'-')+"</div>"+
+        "<div>Última lectura</div><div style='color:#4dd0ff;font-weight:700;text-shadow:0 0 8px rgba(77,208,255,0.5)'>"+fechaDisplay+"</div>";
+      
+      ref.last.volumen=(t.volumen||0); 
+      ref.last.capacidad=(t.capacidad||0); 
+      ref.last.fecha=(t.fecha_ultimo_calado||'');
     }
-    // Corregir el requestIdleCallback
-    (window.requestIdleCallback ? 
-      function(cb){ requestIdleCallback(cb, {timeout: 100}); } : 
-      setTimeout
-    )(function(){ drawSpark(p.spark, t.spark||[], col); }, 0);
+    
+    // Sparkline 3D mejorado
+    requestAnimationFrame(function(){ 
+      drawSpark3DEnhanced(p.spark, t.spark||[], col); 
+    });
+    
     return ref.el;
+    
   } catch(e) {
     console.error('❌ Error en upsertCard:', e);
-    return document.createElement("div"); // Fallback
+    return document.createElement("div");
   }
 }
+
 function diffRenderAlmacen(a, host){ var grid=host.querySelector(':scope > .grid'); if(!grid){ grid=document.createElement('div'); grid.className='grid'; host.appendChild(grid);} var frag=document.createDocumentFragment(); (a.tanques||[]).forEach(function(t){ frag.appendChild(upsertCard(a,t,grid)); }); }
 
 function fastRenderAll(almacenes){ 
@@ -180,8 +288,8 @@ function fastRenderAll(almacenes){
       var tanksGrid=document.createElement('div'); 
       tanksGrid.className='tanks-grid'; 
       tanksGrid.style.display = 'grid';
-      tanksGrid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(340px, 1fr))';
-      tanksGrid.style.gap = '16px';
+      tanksGrid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(360px, 1fr))';
+      tanksGrid.style.gap = '24px';
       tanksGrid.style.padding = '0';
       
       // Renderizar tanques en el grid horizontal
@@ -227,25 +335,9 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
   function percentFmt(n){ return percent(n).toFixed(0)+" %"; }
   function parseDateStr(s){ var p=s.split(' '); var d=p[0].split('-'); var t=(p[1]||'00:00').split(':'); return new Date(Number(d[0]),Number(d[1])-1,Number(d[2]),Number(t[0]||0),Number(t[1]||0)); }
 
+  // FUNCIÓN drawSpark MEJORADA - Usar versión 3D Enhanced
   function drawSpark(canvas, points, stroke){
-    if(!canvas || !canvas.getContext) return;
-    var ctx = canvas.getContext("2d");
-    var w = canvas.width = canvas.clientWidth;
-    var h = canvas.height = canvas.clientHeight;
-    ctx.clearRect(0,0,w,h);
-    if(!points || !points.length) return;
-    var min = Math.min.apply(null, points);
-    var max = Math.max.apply(null, points);
-    var pad = 3;
-    ctx.beginPath();
-    for(var i=0;i<points.length;i++){
-      var x = pad + (w-2*pad) * (i/(points.length-1));
-      var y = h - pad - (h-2*pad) * ((points[i]-min)/Math.max(1,(max-min)));
-      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-    }
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = stroke || "#9fd2ff";
-    ctx.stroke();
+    drawSpark3DEnhanced(canvas, points, stroke);
   }
 
   function drawLineChart(canvas, series, opts){
@@ -283,24 +375,30 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
     });
   }
 
+  // HISTÓRICO MEJORADO (con litros vs litros a 15º)
   function groupForChart(rows, mode){
-    var lab=[], med=[], lib=[];
+    var lab=[], lit=[], lit15=[];
     if(mode==="days"){
       var map={};
       rows.forEach(function(r){
         var d = r.fecha.substr(0,10);
-        if(!map[d]) map[d] = {m:0,l:0,c:0};
-        map[d].m += (r.medido||0);
-        map[d].l += (r.libro||0);
+        if(!map[d]) map[d] = {l:0,l15:0,c:0};
+        map[d].l += (r.litros||0);
+        map[d].l15 += (r.litros_15||0);
         map[d].c += 1;
       });
       Object.keys(map).sort().forEach(function(d){
-        lab.push(d); med.push(map[d].m/map[d].c); lib.push(map[d].l/map[d].c);
+        lab.push(d); lit.push(map[d].l/map[d].c); lit15.push(map[d].l15/map[d].c);
       });
     }else{
-      rows.forEach(function(r){ lab.push(r.fecha); med.push(r.medido||0); lib.push(r.libro||0); });
+      rows.forEach(function(r){ 
+        var timeLabel = r.fecha + (r.hora ? " " + r.hora : "");
+        lab.push(timeLabel); 
+        lit.push(r.litros||0); 
+        lit15.push(r.litros_15||0); 
+      });
     }
-    return {labels:lab, medido:med, libro:lib};
+    return {labels:lab, litros:lit, litros_15:lit15};
   }
 
   function groupByAlmacen(items){
@@ -313,25 +411,31 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
     almacenes.forEach(function(a,i){ var o=document.createElement("option"); o.value=a.id; o.textContent=a.nombre+" ("+(a.tanques?a.tanques.length:0)+")"; if(i===idxActivo) o.selected=true; sel.appendChild(o); });
   }
 
+  // FUNCIÓN makeScale MEJORADA - Usar versión Enhanced
   function makeScale(container){
-    var scale = document.createElement("div"); scale.className="scale";
-    [100,75,50,25,0].forEach(function(p){ var row=document.createElement("div"); row.className="tick"; var line=document.createElement("div"); line.className="line"; var lab=document.createElement("div"); lab.textContent=p+"%"; row.appendChild(line); row.appendChild(lab); scale.appendChild(row); });
-    container.appendChild(scale);
+    makeScaleEnhanced(container);
   }
 
+  // HISTÓRICO MEJORADO con últimos 7 días por defecto
   function renderHistory(tank){
     selectedTank = tank || null;
     var panel = document.getElementById("histPanel");
     if(!tank){ panel.hidden = true; return; }
-    var key = (tank.almacen||"") + "|" + (tank.nombre||"");
-    var rows = (historyByTank[key]||[]).slice().sort(function(a,b){ return parseDateStr(a.fecha) - parseDateStr(b.fecha); });
-    var minD = rows.length? parseDateStr(rows[0].fecha) : null;
-    var maxD = rows.length? parseDateStr(rows[rows.length-1].fecha) : null;
-    var fd = document.getElementById("fromDate"); var td = document.getElementById("toDate");
+    
+    // Auto-configurar últimos 7 días
+    var today = new Date();
+    var weekAgo = new Date();
+    weekAgo.setDate(today.getDate() - 6);
+    
     function fmtISO(d){ return d? (d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")) : ""; }
-    if(minD && maxD){ fd.value = fmtISO(minD); td.value = fmtISO(maxD); }
+    
+    var fd = document.getElementById("fromDate"); 
+    var td = document.getElementById("toDate");
+    fd.value = fmtISO(weekAgo);
+    td.value = fmtISO(today);
+    
     document.getElementById("histTitle").textContent = "Histórico · " + (tank.nombre||"") + " ("+(tank.producto||"-")+")";
-    document.getElementById("histInfo").textContent = (tank.almacen || "Almacén");
+    document.getElementById("histInfo").textContent = (tank.almacen || "Almacén") + " · Últimos 7 días";
     panel.hidden = false;
     applyFilterAndRender();
   }
@@ -339,21 +443,22 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
   function applyFilterAndRender(){
     if(!selectedTank){ return; }
     var key = (selectedTank.almacen||"") + "|" + (selectedTank.nombre||"");
-    var rows = (historyByTank[key]||[]).slice().sort(function(a,b){ return parseDateStr(a.fecha) - parseDateStr(b.fecha); });
+    var rows = (historyByTank[key]||[]).slice().sort(function(a,b){ return parseDateStr(a.fecha + " " + (a.hora||"00:00")) - parseDateStr(b.fecha + " " + (b.hora||"00:00")); });
     var fd = document.getElementById("fromDate").value;
     var td = document.getElementById("toDate").value;
     var df = fd? new Date(fd+"T00:00:00") : null;
     var dt = td? new Date(td+"T23:59:59") : null;
-    filteredRows = rows.filter(function(r){ var d = parseDateStr(r.fecha); return (!df || d>=df) && (!dt || d<=dt); });
+    filteredRows = rows.filter(function(r){ var d = parseDateStr(r.fecha + " 00:00"); return (!df || d>=df) && (!dt || d<=dt); });
     document.getElementById("rowsCount").textContent = filteredRows.length + " filas";
 
     var tb = document.querySelector("#histTable tbody"); tb.innerHTML = "";
     filteredRows.forEach(function(r){
-      var dif = (r.medido||0) - (r.libro||0);
+      var dif = (r.litros||0) - (r.litros_15||0);
       var tr = document.createElement("tr");
       tr.innerHTML = "<td style='text-align:left'>"+r.fecha+"</td>"
-                   + "<td>"+litersFmt(r.medido||0)+"</td>"
-                   + "<td>"+litersFmt(r.libro||0)+"</td>"
+                   + "<td style='text-align:left'>"+(r.hora||"--:--")+"</td>"
+                   + "<td>"+litersFmt(r.litros||0)+"</td>"
+                   + "<td>"+litersFmt(r.litros_15||0)+"</td>"
                    + "<td class='"+diffClass(dif)+"'>"+litersFmt(dif)+"</td>";
       tb.appendChild(tr);
     });
@@ -362,14 +467,17 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
     var grouped = groupForChart(filteredRows, mode);
     var col = colorFrom(selectedTank.color || selectedTank.colorProducto || selectedTank.colorRGB);
     drawLineChart(document.getElementById("histChart"),
-      [{name:"Medido", data: grouped.medido, color: col},
-       {name:"Libro", data: grouped.libro, color: "#9fd2ff"}],
+      [{name:"Litros", data: grouped.litros, color: col},
+       {name:"Litros a 15º", data: grouped.litros_15, color: "#9fd2ff"}],
       {labels: grouped.labels});
   }
 
   function exportCsv(filename, rows){
-    var csv = "Fecha;Medido (L);Libro (L);Diferencia (L)\r\n";
-    (rows||[]).forEach(function(r){ var d=(r.medido||0)-(r.libro||0); csv += [r.fecha, r.medido||0, r.libro||0, d].join(";") + "\r\n"; });
+    var csv = "Fecha;Hora;Litros;Litros a 15º;Diferencia (L)\r\n";
+    (rows||[]).forEach(function(r){ 
+      var d=(r.litros||0)-(r.litros_15||0); 
+      csv += [r.fecha, r.hora||"", r.litros||0, r.litros_15||0, d].join(";") + "\r\n"; 
+    });
     var blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
     if(window.navigator.msSaveOrOpenBlob){ window.navigator.msSaveOrOpenBlob(blob, filename); }
     else{ var a=document.createElement("a"); var url=URL.createObjectURL(blob); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 0); }
@@ -384,13 +492,16 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
     var fd = document.getElementById("fromDate").value || "";
     var td = document.getElementById("toDate").value || "";
     var title = "Histórico - " + (tank.nombre||"") + " ("+(tank.producto||"-")+")";
-    var css = "body{font:12px Arial;margin:16px;color:#111}h1{font-size:18px;margin:0 0 8px}h2{font-size:14px;margin:10px 0 6px}table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #ddd;padding:6px 8px;text-align:right}th:first-child,td:first-child{text-align:left}img{max-width:100%} .meta{margin-bottom:8px;color:#333}";
+    var css = "body{font:12px Arial;margin:16px;color:#111}h1{font-size:18px;margin:0 0 8px}h2{font-size:14px;margin:10px 0 6px}table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #ddd;padding:6px 8px;text-align:right}th:first-child,th:nth-child(2),td:first-child,td:nth-child(2){text-align:left}img{max-width:100%} .meta{margin-bottom:8px;color:#333}";
     var html = "<!doctype html><html><head><meta charset='utf-8'><title>"+title+"</title></head><body>";
     html += "<h1>"+title+"</h1>";
     html += "<div class='meta'>Almacén: <b>"+(tank.almacen||"")+"</b> · Rango: <b>"+(fd||"-")+"</b> a <b>"+(td||"-")+"</b></div>";
-    html += "<h2>Evolución (Medido vs Libro)</h2><img src='"+img+"'/>";
-    html += "<h2>Tabla de lecturas</h2><table><thead><tr><th>Fecha</th><th>Medido (L)</th><th>Libro (L)</th><th>Dif. (L)</th></tr></thead><tbody>";
-    (filteredRows||[]).forEach(function(r){ var d=(r.medido||0)-(r.libro||0); html += "<tr><td>"+r.fecha+"</td><td>"+(r.medido||0)+"</td><td>"+(r.libro||0)+"</td><td>"+d+"</td></tr>"; });
+    html += "<h2>Evolución (Litros vs Litros a 15º)</h2><img src='"+img+"'/>";
+    html += "<h2>Tabla de lecturas</h2><table><thead><tr><th>Fecha</th><th>Hora</th><th>Litros</th><th>Litros a 15º</th><th>Dif. (L)</th></tr></thead><tbody>";
+    (filteredRows||[]).forEach(function(r){ 
+      var d=(r.litros||0)-(r.litros_15||0); 
+      html += "<tr><td>"+r.fecha+"</td><td>"+(r.hora||"--:--")+"</td><td>"+(r.litros||0)+"</td><td>"+(r.litros_15||0)+"</td><td>"+d+"</td></tr>"; 
+    });
     html += "</tbody></table></body></html>";
     win.document.open(); win.document.write(html); win.document.close();
     win.focus(); win.print();
@@ -476,62 +587,8 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
     (a.tanques||[]).forEach(function(t){
       total += t.volumen||0; cap += t.capacidad||0; if(t.status==="bad") alarms++;
 
-      var col = colorFrom(t.color || t.colorProducto || t.colorRGB);
-      var colLight = shade(col, +0.24);
-      var card = document.createElement("div"); card.className="card";
-      var tankWrap = document.createElement("div"); tankWrap.className="tankWrap";
-      var tank = document.createElement("div"); tank.className="tank";
-      var liquid = document.createElement("div"); liquid.className="liquid";
-      liquid.style.setProperty("--fill", col);
-      liquid.style.setProperty("--fillLight", colLight);
-      var pct = (t.capacidad>0)? percent((t.volumen/t.capacidad)*100) : 0; liquid.style.height = pct+"%";
-      var w1=document.createElement("div"); w1.className="wave";
-      var w2=document.createElement("div"); w2.className="wave wave2";
-      var w3=document.createElement("div"); w3.className="wave wave3";
-      liquid.appendChild(w1); liquid.appendChild(w2); liquid.appendChild(w3);
-      var gloss=document.createElement("div"); gloss.className="gloss"; tank.appendChild(gloss);
-      var stripe=document.createElement("div"); stripe.className="stripe"; tank.appendChild(stripe);
-      tank.appendChild(liquid);
-      makeScale(tankWrap);
-      tankWrap.appendChild(tank);
-      var pctLabel=document.createElement("div"); pctLabel.className="pct"; pctLabel.textContent = percentFmt(pct); tankWrap.appendChild(pctLabel);
-
-      var info = document.createElement("div");
-      var r1 = document.createElement("div"); r1.style.display="flex"; r1.style.alignItems="center"; r1.style.justifyContent="space-between"; r1.style.margin="4px 0";
-      var nm = document.createElement("div"); nm.className="name"; nm.textContent = (t.nombre||"TANQUE");
-      var st = document.createElement("div"); st.className="status";
-      var dt = document.createElement("span"); dt.className="dot"; dt.style.background = nivelColorFromPct(pct);
-      // CAMBIO PRINCIPAL: usar nivelFromPct en lugar de t.status
-      var stx = document.createElement("span"); stx.textContent = nivelFromPct(pct);
-      st.appendChild(dt); st.appendChild(stx);
-      /*__WARN_INSERT_CREATION__*/
-      if(pct <= 20){ dt.className="warnIcon"; dt.textContent="⚠"; dt.style.color="#ef4444"; dt.style.background="transparent"; }
-      else { dt.className="dot"; dt.textContent=""; dt.style.background=nivelColorFromPct(pct); }
-
-      r1.appendChild(nm); r1.appendChild(st);
-      info.appendChild(r1);
-
-      var c = document.createElement("canvas"); c.className="spark"; info.appendChild(c);
-
-      var ullage = (t.capacidad||0) - (t.volumen||0);
-      var fechaDisplay = t.fecha_ultimo_calado || '-';
-      var kv = document.createElement("div"); kv.className="kv";
-      kv.innerHTML = "<div>Volumen</div><div><strong>"+litersLabel(t.volumen||0)+"</strong></div>"
-                   + "<div>Capacidad</div><div>"+litersLabel(t.capacidad||0)+"</div>"
-                   + "<div>Disponible</div><div>"+litersLabel(ullage)+"</div>"
-                   + "<div>Producto</div><div>"+(t.producto||"-")+"</div>"
-                   + "<div>Temp.</div><div>"+(t.temperatura!=null? t.temperatura.toFixed(1)+' °C' : '-')+"</div>"
-                   + "<div>Fecha</div><div style='color:#2aa8ff;font-weight:600'>"+fechaDisplay+"</div>";
-      info.appendChild(kv);
-
-      card.appendChild(tankWrap); card.appendChild(info); grid.appendChild(card);
-      setTimeout(function(){ drawSpark(c, t.spark||[], col); }, 0);
-
-      card.onclick = function(){
-        var cards = document.querySelectorAll(".card"); for(var i=0;i<cards.length;i++) cards[i].classList.remove("sel");
-        card.classList.add("sel");
-        renderHistory(t);
-      };
+      var card = upsertCard(a, t, grid);
+      grid.appendChild(card);
     });
 
     renderTotals(a);
@@ -596,8 +653,260 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
     }, 5000); // Esperar 5s después de cargar
   });
 
+  // ===========================================
+  // NUEVAS FUNCIONES 3D ENHANCED
+  // ===========================================
+
+  // Escala 3D mejorada
+  function makeScaleEnhanced(container){
+    var scale = document.createElement("div"); 
+    scale.className="scale";
+    
+    [100,75,50,25,0].forEach(function(p, index){ 
+      var row=document.createElement("div"); 
+      row.className="tick"; 
+      
+      var line=document.createElement("div"); 
+      line.className="line"; 
+      line.style.animationDelay = (index * 0.1) + 's';
+      
+      var lab=document.createElement("div"); 
+      lab.textContent=p+"%";
+      lab.style.fontWeight = p === 100 || p === 0 ? "800" : "700";
+      
+      row.appendChild(line); 
+      row.appendChild(lab); 
+      scale.appendChild(row); 
+    });
+    
+    container.appendChild(scale);
+  }
+
+  // Sparkline 3D ultra mejorado
+  function drawSpark3DEnhanced(canvas, points, stroke) {
+    if (!canvas || !canvas.getContext) return;
+    
+    var ctx = canvas.getContext("2d");
+    var dpr = window.devicePixelRatio || 1;
+    var w = canvas.clientWidth;
+    var h = canvas.clientHeight;
+    
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    ctx.scale(dpr, dpr);
+    
+    ctx.clearRect(0, 0, w, h);
+    
+    if (!points || !points.length) return;
+    
+    var min = Math.min.apply(null, points);
+    var max = Math.max.apply(null, points);
+    var pad = 6;
+    
+    // Gradiente de fondo con efecto 3D
+    var bgGradient = ctx.createLinearGradient(0, 0, 0, h);
+    bgGradient.addColorStop(0, 'rgba(42,168,255,0.08)');
+    bgGradient.addColorStop(0.5, 'rgba(42,168,255,0.04)');
+    bgGradient.addColorStop(1, 'rgba(42,168,255,0.02)');
+    
+    // Área bajo la curva
+    ctx.beginPath();
+    ctx.moveTo(pad, h - pad);
+    
+    for (var i = 0; i < points.length; i++) {
+      var x = pad + (w - 2 * pad) * (i / (points.length - 1));
+      var y = h - pad - (h - 2 * pad) * ((points[i] - min) / Math.max(1, (max - min)));
+      
+      if (i === 0) {
+        ctx.lineTo(x, y);
+      } else {
+        // Curvas suaves con bezier
+        var prevX = pad + (w - 2 * pad) * ((i - 1) / (points.length - 1));
+        var prevY = h - pad - (h - 2 * pad) * ((points[i - 1] - min) / Math.max(1, (max - min)));
+        var cpX = (prevX + x) / 2;
+        ctx.quadraticCurveTo(cpX, prevY, x, y);
+      }
+    }
+    
+    ctx.lineTo(w - pad, h - pad);
+    ctx.closePath();
+    ctx.fillStyle = bgGradient;
+    ctx.fill();
+    
+    // Línea principal con gradiente
+    var lineGradient = ctx.createLinearGradient(0, 0, w, 0);
+    lineGradient.addColorStop(0, stroke + '60');
+    lineGradient.addColorStop(0.5, stroke);
+    lineGradient.addColorStop(1, stroke + '60');
+    
+    ctx.beginPath();
+    for (var i = 0; i < points.length; i++) {
+      var x = pad + (w - 2 * pad) * (i / (points.length - 1));
+      var y = h - pad - (h - 2 * pad) * ((points[i] - min) / Math.max(1, (max - min)));
+      
+      if (i === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        var prevX = pad + (w - 2 * pad) * ((i - 1) / (points.length - 1));
+        var prevY = h - pad - (h - 2 * pad) * ((points[i - 1] - min) / Math.max(1, (max - min)));
+        var cpX = (prevX + x) / 2;
+        ctx.quadraticCurveTo(cpX, prevY, x, y);
+      }
+    }
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = lineGradient;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    
+    // Sombra de la línea
+    ctx.beginPath();
+    for (var i = 0; i < points.length; i++) {
+      var x = pad + (w - 2 * pad) * (i / (points.length - 1));
+      var y = h - pad - (h - 2 * pad) * ((points[i] - min) / Math.max(1, (max - min))) + 1;
+      
+      if (i === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        var prevX = pad + (w - 2 * pad) * ((i - 1) / (points.length - 1));
+        var prevY = h - pad - (h - 2 * pad) * ((points[i - 1] - min) / Math.max(1, (max - min))) + 1;
+        var cpX = (prevX + x) / 2;
+        ctx.quadraticCurveTo(cpX, prevY, x, y);
+      }
+    }
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+    ctx.stroke();
+    
+    // Puntos de datos con efecto brillante
+    points.forEach(function(point, i) {
+      var x = pad + (w - 2 * pad) * (i / (points.length - 1));
+      var y = h - pad - (h - 2 * pad) * ((point - min) / Math.max(1, (max - min)));
+      
+      // Resplandor
+      var glowGradient = ctx.createRadialGradient(x, y, 0, x, y, 8);
+      glowGradient.addColorStop(0, stroke + 'AA');
+      glowGradient.addColorStop(1, 'transparent');
+      ctx.fillStyle = glowGradient;
+      ctx.fillRect(x - 8, y - 8, 16, 16);
+      
+      // Punto principal
+      ctx.beginPath();
+      ctx.arc(x, y, 2.5, 0, 2 * Math.PI);
+      ctx.fillStyle = stroke;
+      ctx.fill();
+      
+      // Brillo interno
+      ctx.beginPath();
+      ctx.arc(x - 0.5, y - 0.5, 1, 0, 2 * Math.PI);
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.fill();
+    });
+  }
+
+  // Animación de nivel de líquido
+  function animateLiquidLevel(liquid, fromPct, toPct) {
+    liquid.style.transition = 'height 0.8s cubic-bezier(0.4, 0, 0.2, 1)';
+    liquid.style.height = toPct + "%";
+    
+    // Efecto de ondulación al cambiar nivel
+    if (Math.abs(toPct - fromPct) > 5) {
+      liquid.style.transform = 'scaleY(1.05)';
+      setTimeout(function() {
+        liquid.style.transform = 'scaleY(1)';
+      }, 200);
+    }
+  }
+
+  // Efecto de cambio de color
+  function addColorChangeEffect(liquid, color) {
+    var flash = document.createElement('div');
+    flash.style.position = 'absolute';
+    flash.style.inset = '0';
+    flash.style.background = color;
+    flash.style.opacity = '0.6';
+    flash.style.animation = 'colorFlash 0.6s ease-out';
+    flash.style.borderRadius = 'inherit';
+    flash.style.pointerEvents = 'none';
+    
+    liquid.appendChild(flash);
+    setTimeout(function() {
+      if (flash.parentNode) flash.parentNode.removeChild(flash);
+    }, 600);
+  }
+
+  // Efecto parallax en hover
+  function addParallaxEffect(card) {
+    var tank = card.querySelector('.tank');
+    var liquid = card.querySelector('.liquid');
+    
+    card.addEventListener('mousemove', function(e) {
+      var rect = card.getBoundingClientRect();
+      var x = (e.clientX - rect.left - rect.width / 2) / rect.width;
+      var y = (e.clientY - rect.top - rect.height / 2) / rect.height;
+      
+      tank.style.transform = `rotateY(${x * 8}deg) rotateX(${-y * 4}deg)`;
+      liquid.style.transform = `translateX(${x * 2}px)`;
+    });
+  }
+
+  // Remover efecto parallax
+  function removeParallaxEffect(card) {
+    var tank = card.querySelector('.tank');
+    var liquid = card.querySelector('.liquid');
+    
+    card.onmousemove = null;
+    tank.style.transform = '';
+    liquid.style.transform = '';
+  }
+
+  // Efecto de selección
+  function addSelectionEffect(card) {
+    // Efecto de pulso de selección
+    card.style.animation = 'selectionPulse 0.6s ease-out';
+    setTimeout(function() {
+      card.style.animation = '';
+    }, 600);
+  }
+
+  // Efecto de brillo en puntos de estado
+  function addGlowEffect(dot, color) {
+    dot.style.boxShadow = `
+      0 0 12px ${color}80,
+      0 2px 6px rgba(0,0,0,0.4),
+      inset 0 1px 0 rgba(255,255,255,0.6),
+      inset 0 -1px 0 rgba(0,0,0,0.2)
+    `;
+  }
+
+  // Efecto de pulso para advertencias
+  function addPulseEffect(element) {
+    element.style.animation = 'pulse 2s ease-in-out infinite';
+  }
+
+  // CSS dinámico para animaciones (agregar al head si no existe)
+  if (!document.getElementById('enhanced-3d-styles')) {
+    var style = document.createElement('style');
+    style.id = 'enhanced-3d-styles';
+    style.textContent = `
+      @keyframes colorFlash {
+        0% { opacity: 0; transform: scale(0.8); }
+        50% { opacity: 0.6; transform: scale(1.1); }
+        100% { opacity: 0; transform: scale(1); }
+      }
+      
+      @keyframes selectionPulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.02); }
+        100% { transform: scale(1); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // DATOS DEMO ACTUALIZADOS para histórico
   var amarillo="#fbbf24", azul="#3b82f6", rojo="#ef4444", hvo="#39FF14";
-  function t(n,prod,col,cap,vol,alm){ return { almacen:alm, nombre:n, producto:prod, color:col, capacidad:cap, volumen:vol, status:"ok", temperatura:24.0, spark:[50,52,51,53,54,55,56,58,59,57], fecha_ultimo_calado:"29/08/2025 14:30" }; }
+  function t(n,prod,col,cap,vol,alm){ return { almacen:alm, nombre:n, producto:prod, color:col, capacidad:cap, volumen:vol, status:"ok", temperatura:24.0, spark:[50,52,51,53,54,55,56,58,59,57], fecha_ultimo_calado:"31/08/2025 14:30" }; }
 
   var demo = {
     almacenes:[
@@ -621,30 +930,36 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
     activoId:"ALM1"
   };
 
+  // Datos histórico actualizados
   var hist = {
     "ALMACEN 1|T1":[
-      {fecha:"2025-07-28 08:00", medido:40100, libro:40020},
-      {fecha:"2025-07-29 08:00", medido:40150, libro:40100},
-      {fecha:"2025-07-30 08:00", medido:40200, libro:40120},
-      {fecha:"2025-07-31 08:00", medido:40450, libro:40380},
-      {fecha:"2025-08-01 08:00", medido:40500, libro:40300},
-      {fecha:"2025-08-02 08:00", medido:40800, libro:40600},
-      {fecha:"2025-08-03 08:00", medido:41000, libro:40950},
-      {fecha:"2025-08-03 14:00", medido:40500, libro:40400},
-      {fecha:"2025-08-03 20:00", medido:39800, libro:39600},
-      {fecha:"2025-08-04 08:00", medido:39200, libro:39000}
+      {fecha:"2025-07-28", hora:"08:00", litros:40100, litros_15:40020},
+      {fecha:"2025-07-29", hora:"08:00", litros:40150, litros_15:40100},
+      {fecha:"2025-07-30", hora:"08:00", litros:40200, litros_15:40120},
+      {fecha:"2025-07-31", hora:"08:00", litros:40450, litros_15:40380},
+      {fecha:"2025-08-01", hora:"08:00", litros:40500, litros_15:40300},
+      {fecha:"2025-08-01", hora:"14:30", litros:40480, litros_15:40290},
+      {fecha:"2025-08-02", hora:"08:00", litros:40800, litros_15:40600},
+      {fecha:"2025-08-02", hora:"16:15", litros:40750, litros_15:40580},
+      {fecha:"2025-08-03", hora:"08:00", litros:41000, litros_15:40950},
+      {fecha:"2025-08-03", hora:"14:00", litros:40500, litros_15:40400},
+      {fecha:"2025-08-03", hora:"20:00", litros:39800, litros_15:39600},
+      {fecha:"2025-08-04", hora:"08:00", litros:39200, litros_15:39000}
     ],
     "ALMACEN 1|T3":[
-      {fecha:"2025-07-30 08:00", medido:14000, libro:14120},
-      {fecha:"2025-07-31 08:00", medido:13500, libro:13600},
-      {fecha:"2025-08-01 08:00", medido:13000, libro:13100},
-      {fecha:"2025-08-02 08:00", medido:12500, libro:12600},
-      {fecha:"2025-08-03 08:00", medido:12000, libro:12100}
+      {fecha:"2025-07-30", hora:"08:00", litros:14000, litros_15:14120},
+      {fecha:"2025-07-31", hora:"08:00", litros:13500, litros_15:13600},
+      {fecha:"2025-08-01", hora:"08:00", litros:13000, litros_15:13100},
+      {fecha:"2025-08-01", hora:"15:45", litros:12950, litros_15:13080},
+      {fecha:"2025-08-02", hora:"08:00", litros:12500, litros_15:12600},
+      {fecha:"2025-08-02", hora:"17:30", litros:12450, litros_15:12580},
+      {fecha:"2025-08-03", hora:"08:00", litros:12000, litros_15:12100}
     ],
     "ALMACEN 2|T2":[
-      {fecha:"2025-07-31 08:00", medido:22500, libro:22500},
-      {fecha:"2025-08-01 08:00", medido:22400, libro:22350},
-      {fecha:"2025-08-02 08:00", medido:22200, libro:22100}
+      {fecha:"2025-07-31", hora:"08:00", litros:22500, litros_15:22500},
+      {fecha:"2025-08-01", hora:"08:00", litros:22400, litros_15:22350},
+      {fecha:"2025-08-01", hora:"16:00", litros:22380, litros_15:22330},
+      {fecha:"2025-08-02", hora:"08:00", litros:22200, litros_15:22100}
     ]
   };
 
