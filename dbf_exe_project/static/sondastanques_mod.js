@@ -75,13 +75,27 @@ var __STATE = { lastKey:null, cardsByKey:new Map(), sectionByAlm:new Map(), pend
 function hashKey(obj){ try{ var s=JSON.stringify(obj,function(k,v){ if(v&&typeof v==='object'){ if('spark'in v){ var c=Object.assign({},v); delete c.spark; return c; } } return v;}); var h=5381; for(var i=0;i<s.length;i++) h=((h<<5)+h)+s.charCodeAt(i); return (h>>>0).toString(16);}catch(_){return String(Math.random());} }
 function keyForTank(a,t){ return (a.id!=null?a.id:a.nombre||'A') + '|' + (t.id_tanque||t.codigo||t.nombre||Math.random()); }
 
-// FUNCIÓN upsertCard 3D ULTRA MEJORADA
+// FUNCIÓN upsertCard 3D ULTRA MEJORADA - CORREGIDA
 function upsertCard(a,t,grid){
   try {
     var key=keyForTank(a,t); 
     var ref=__STATE.cardsByKey.get(key);
     var col=colorFrom(t.color||t.colorProducto||t.colorRGB); 
-    var colLight=shade(col,+0.35); // Más brillo para efectos 3D
+    
+    // CORRECCIÓN: Asegurar que siempre haya un color válido
+    if(!col || col === "#1987ff") {
+      // Asignar colores por defecto según producto
+      var producto = (t.producto || "").toLowerCase();
+      if(producto.includes("gasoleo a") || producto.includes("gasóleo a")) col = "#f59e0b";
+      else if(producto.includes("gasoleo b") || producto.includes("gasóleo b")) col = "#ef4444";
+      else if(producto.includes("gasoleo c") || producto.includes("gasóleo c")) col = "#3b82f6";
+      else if(producto.includes("hvo")) col = "#10b981";
+      else if(producto.includes("adblue") || producto.includes("ad-blue")) col = "#06b6d4";
+      else if(producto.includes("diesel")) col = "#f59e0b";
+      else col = "#6366f1"; // Color por defecto
+    }
+    
+    var colLight=shade(col,+0.35);
     var pct=(t.capacidad>0)? percent((t.volumen/t.capacidad)*100):0;
     var nivel = nivelFromPct(pct); 
     var colorNivel = nivelColorFromPct(pct);
@@ -101,13 +115,13 @@ function upsertCard(a,t,grid){
       liquid.style.setProperty("--fill",col); 
       liquid.style.setProperty("--fillLight",colLight);
       
-      // Ondas 3D mejoradas con efectos más realistas
+      // Ondas 3D mejoradas
       var w1=document.createElement("div"); w1.className="wave";
       var w2=document.createElement("div"); w2.className="wave wave2";
       var w3=document.createElement("div"); w3.className="wave wave3";
       liquid.appendChild(w1); liquid.appendChild(w2); liquid.appendChild(w3);
       
-      // Efectos de superficie mejorados
+      // Efectos de superficie
       var gloss=document.createElement("div"); gloss.className="gloss"; 
       tank.appendChild(gloss);
       
@@ -123,32 +137,40 @@ function upsertCard(a,t,grid){
       
       var info=document.createElement("div");
       
+      // CORRECCIÓN: Layout mejorado sin recuadros problemáticos
       var r1=document.createElement("div"); 
       r1.style.display="flex"; 
       r1.style.alignItems="center"; 
       r1.style.justifyContent="space-between"; 
-      r1.style.margin="4px 0 8px 0";
+      r1.style.marginBottom="8px"; // Más espacio
       
-      var nm=document.createElement("div"); nm.className="name";
+      var nm=document.createElement("div"); 
+      nm.className="name";
       
-      var st=document.createElement("div"); st.className="status"; 
-      var dt=document.createElement("span"); dt.className="dot"; 
+      var st=document.createElement("div"); 
+      st.className="status"; 
+      var dt=document.createElement("span"); 
+      dt.className="dot"; 
       var stx=document.createElement("span"); 
-      st.appendChild(dt); st.appendChild(stx);
+      st.appendChild(dt); 
+      st.appendChild(stx);
       
-      r1.appendChild(nm); r1.appendChild(st); 
+      r1.appendChild(nm); 
+      r1.appendChild(st); 
       info.appendChild(r1);
       
-      var c=document.createElement("canvas"); c.className="spark"; 
+      var c=document.createElement("canvas"); 
+      c.className="spark"; 
       info.appendChild(c);
       
-      var kv=document.createElement("div"); kv.className="kv"; 
+      var kv=document.createElement("div"); 
+      kv.className="kv"; 
       info.appendChild(kv);
       
       card.appendChild(tankWrap); 
       card.appendChild(info);
       
-      // Efectos de hover 3D avanzados
+      // Efectos de hover mejorados
       card.addEventListener('mouseenter', function() {
         addParallaxEffect(card);
       });
@@ -176,17 +198,13 @@ function upsertCard(a,t,grid){
     
     var p=ref.parts;
     
-    // Actualizar color con transición suave
-    if(ref.last.color!==col){ 
-      p.liquid.style.setProperty("--fill",col); 
-      p.liquid.style.setProperty("--fillLight",colLight); 
-      ref.last.color=col; 
-      
-      // Efecto de brillo al cambiar color
-      addColorChangeEffect(p.liquid, col);
-    }
+    // CORRECCIÓN: Forzar actualización de color siempre
+    p.liquid.style.setProperty("--fill",col); 
+    p.liquid.style.setProperty("--fillLight",colLight);
+    p.liquid.style.background = col; // Forzar background directo también
+    ref.last.color=col;
     
-    // Actualizar porcentaje con animación fluida
+    // Actualizar porcentaje
     if(ref.last.pct!==pct){ 
       animateLiquidLevel(p.liquid, ref.last.pct, pct);
       p.pctLabel.textContent=percentFmt(pct); 
@@ -196,10 +214,11 @@ function upsertCard(a,t,grid){
     var nombre=(t.nombre||"TANQUE"); 
     if(ref.last.nombre!==nombre){ 
       p.nm.textContent=nombre; 
+      p.nm.style.color = "#e7eef6"; // Forzar color del nombre
       ref.last.nombre=nombre; 
     }
     
-    // Estado con efectos 3D mejorados
+    // Estado con efectos mejorados
     if(ref.last.nivel!==nivel){ 
       if(pct <= 20){ 
         p.dt.className="warnIcon"; 
@@ -217,7 +236,7 @@ function upsertCard(a,t,grid){
       ref.last.nivel=nivel; 
     }
     
-    // Actualizar información con efectos de transición
+    // Actualizar información
     if(ref.last.volumen!==(t.volumen||0) || ref.last.capacidad!==(t.capacidad||0) || ref.last.fecha!==(t.fecha_ultimo_calado||'')){
       var ullage=(t.capacidad||0)-(t.volumen||0);
       var fechaDisplay = t.fecha_ultimo_calado || '-';
@@ -235,7 +254,7 @@ function upsertCard(a,t,grid){
       ref.last.fecha=(t.fecha_ultimo_calado||'');
     }
     
-    // Sparkline 3D mejorado
+    // Sparkline mejorado
     requestAnimationFrame(function(){ 
       drawSpark3DEnhanced(p.spark, t.spark||[], col); 
     });
@@ -530,6 +549,7 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
     });
   }
 
+  // FUNCIÓN render() CORREGIDA
   function render(){
     try {
       var gridHost = document.getElementById("grid");
@@ -544,13 +564,13 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
       if(window.__showAllMode){ 
         console.log('🎯 Modo "Ver todos" activo - Almacenes:', almacenes.length);
         
-        // Cambiar modo de grid para "ver todos"
+        // Cambiar a modo "ver todos"
         if(gridHost) {
           gridHost.className = "show-all-mode";
         }
         
         fastRenderAll(almacenes); 
-        document.getElementById("footerInfo").textContent = "Almacenes: "+almacenes.length+" • Activo: todos";
+        document.getElementById("footerInfo").textContent = "Almacenes: "+almacenes.length+" • Modo: Todos";
         
         // Para el modo "todos", calculamos totales globales
         var globalTotals = {tanques: []};
@@ -563,10 +583,10 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
         return; 
       }
       
-      // Modo almacén individual
+      // CORRECCIÓN PRINCIPAL: Modo almacén individual
       if(gridHost) {
-        gridHost.className = "";
-        gridHost.style.display = "";
+        gridHost.className = ""; // Quitar clase show-all-mode
+        gridHost.innerHTML = ""; // Limpiar contenido
       }
       
       var a = almacenes[idxActivo]; 
@@ -576,26 +596,37 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
       }
       
       renderSelect();
+      
+      // RENDERIZADO INDIVIDUAL CORREGIDO
+      var currentKey = hashKey(a);
+      if(currentKey === __STATE.lastKey && !window.__forceRender){ return; }
+      __STATE.lastKey = currentKey;
+      
+      var total=0, cap=0, alarms=0;
+      
+      // Limpiar y renderizar cards individuales en grid normal
+      (a.tanques||[]).forEach(function(t){
+        total += t.volumen||0; 
+        cap += t.capacidad||0; 
+        if(t.status==="bad") alarms++;
+
+        var card = upsertCard(a, t, gridHost);
+        gridHost.appendChild(card);
+      });
+
+      renderTotals(a);
+      
+      var s = document.getElementById("summary");
+      var pctTot = cap ? (total/cap*100) : 0;
+      s.textContent = (a.nombre||"Almacén")+": "+percentFmt(pctTot)+" ("+litersLabel(total)+" de "+litersLabel(cap)+") • Alarmas: "+alarms;
+      document.getElementById("footerInfo").textContent = "Almacenes: "+almacenes.length+" • Activo: "+(idxActivo+1)+"/"+almacenes.length;
+      
+      // Reset force render flag
+      window.__forceRender = false;
+      
     } catch(e) {
       console.error('❌ Error en render():', e);
     }
-    var currentKey = hashKey(window.__showAllMode ? almacenes : almacenes[idxActivo]);
-    if(currentKey === __STATE.lastKey){ return; }
-    __STATE.lastKey = currentKey;
-    var total=0, cap=0, alarms=0; var grid = document.getElementById("grid"); grid.innerHTML = "";
-
-    (a.tanques||[]).forEach(function(t){
-      total += t.volumen||0; cap += t.capacidad||0; if(t.status==="bad") alarms++;
-
-      var card = upsertCard(a, t, grid);
-      grid.appendChild(card);
-    });
-
-    renderTotals(a);
-    var s = document.getElementById("summary");
-    var pctTot = cap ? (total/cap*100) : 0;
-    s.textContent = (a.nombre||"Almacén")+": "+percentFmt(pctTot)+" ("+litersLabel(total)+" de "+litersLabel(cap)+") • Alarmas: "+alarms;
-    document.getElementById("footerInfo").textContent = "Almacenes: "+almacenes.length+" • Activo: "+(idxActivo+1)+"/"+almacenes.length;
   }
 
   window.setData = function(input){
@@ -964,4 +995,80 @@ function colorFrom(v){ if(typeof v==="string") return v; if(typeof v==="number")
   };
 
   if(!window.__vfp_integration__) { window.setData(demo); window.setHistoryData(hist); }
+})();
+
+// ===========================================
+// CONTROL PARA MOSTRAR TODOS LOS ALMACENES - CORREGIDO
+// ===========================================
+(function(){
+  var cb, lastRaw = null, setDataOrig = null, allAlmacenes = [];
+  function qs(id){ return document.getElementById(id); }
+  function setControlsEnabled(flag){
+    var sel = qs("almacenSel"), prev = qs("prevBtn"), next = qs("nextBtn");
+    if(sel) sel.disabled = !flag;
+    if(prev) prev.disabled = !flag;
+    if(next) next.disabled = !flag;
+  }
+  
+  // FUNCIÓN applyMode CORREGIDA
+  function applyMode(){
+    if(!setDataOrig) return;
+    var all = !!(cb && cb.checked);
+    window.__showAllMode = all;
+    window.__forceRender = true; // NUEVO: forzar re-render
+    
+    if(all && allAlmacenes.length > 0){
+      setControlsEnabled(false);
+      setDataOrig({ almacenes: allAlmacenes, activoId: null });
+    }else if(!all && lastRaw){
+      setControlsEnabled(true);
+      // CORRECCIÓN: Resetear al primer almacén
+      if(lastRaw && lastRaw.almacenes && lastRaw.almacenes.length > 0) {
+        idxActivo = 0; // FORZAR primer almacén
+        setDataOrig({ almacenes: lastRaw.almacenes, activoId: lastRaw.almacenes[0].id });
+      } else {
+        setDataOrig(lastRaw);
+      }
+    }
+  }
+  
+  function hookSetDataSoon(){
+    var tries = 0;
+    var iv = setInterval(function(){
+      tries++;
+      if(typeof window.setData === "function"){
+        if(!setDataOrig){
+          setDataOrig = window.setData;
+          window.setData = function(input){
+            lastRaw = input;
+            // Guardar todos los almacenes para el modo "Ver todos"
+            if(input && input.almacenes){
+              allAlmacenes = input.almacenes.slice();
+            }
+            // Aplicar según modo actual
+            applyMode();
+          };
+        }
+        clearInterval(iv);
+      }else if(tries>50){ // ~5s
+        clearInterval(iv);
+      }
+    }, 100);
+  }
+  
+  function init(){
+    cb = qs("allToggle");
+    window.__showAllMode = false;
+    hookSetDataSoon();
+    if(cb){
+      cb.checked = false;
+      cb.addEventListener("change", applyMode);
+    }
+  }
+  
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", init);
+  }else{
+    init();
+  }
 })();
