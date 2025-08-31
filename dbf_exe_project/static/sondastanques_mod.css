@@ -79,7 +79,7 @@
     z-index:2;
   }
 
-  /* HEADER 3D MEJORADO */
+  /* HEADER 3D MEJORADO - CORREGIDO */
   header{
     position:sticky; 
     top:0; 
@@ -102,7 +102,8 @@
     align-items:center;
     gap:12px;
     padding:12px 20px;
-    flex-wrap:wrap;
+    flex-wrap:nowrap; /* CORREGIDO: evitar wrap */
+    min-height:60px; /* NUEVO: altura mínima fija */
   }
 
   .brand img{
@@ -119,6 +120,8 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+    white-space:nowrap; /* NUEVO: evitar salto de línea */
+    min-width:200px; /* NUEVO: ancho mínimo */
   }
 
   .pill{
@@ -139,7 +142,8 @@
   .ctrls{
     display:flex;
     align-items:center;
-    gap:10px;
+    gap:8px; /* CORREGIDO: reducir gap */
+    flex-shrink:0; /* NUEVO: evitar que se compriman */
   }
 
   /* CONTROLES 3D MEJORADOS */
@@ -255,7 +259,7 @@
     padding:20px 24px;
   }
 
-  /* CARDS 3D ULTRA MEJORADAS */
+  /* CARDS 3D ULTRA MEJORADAS - CORREGIDAS */
   .card{
     --sel:var(--accent);
     --selGlow:rgba(42,168,255,.8);
@@ -265,8 +269,8 @@
     padding:18px;
     display:grid;
     grid-template-columns:auto 1fr;
-    gap:18px;
-    align-items:center;
+    gap:20px; /* CORREGIDO: aumentar gap */
+    align-items:start; /* CORREGIDO: start en lugar de center */
     position:relative;
     overflow:visible;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
@@ -299,7 +303,7 @@
   }
 
   .card:hover{
-    transform: translateY(-6px) rotateX(2deg);
+    transform: translateY(-4px) rotateX(1deg); /* CORREGIDO: efectos más sutiles */
     box-shadow: 
       0 12px 32px rgba(0,0,0,0.5),
       0 4px 16px rgba(0,0,0,0.4),
@@ -314,7 +318,7 @@
 
   .card.sel{
     border-color:var(--sel);
-    transform: translateY(-8px) rotateX(3deg);
+    transform: translateY(-6px) rotateX(2deg); /* CORREGIDO: efectos más sutiles */
     box-shadow:
       0 0 0 3px var(--sel),
       0 0 48px var(--selGlow),
@@ -330,10 +334,10 @@
       rgba(42,168,255,0.2) 100%);
   }
 
-  /* TANQUE 3D ULTRA MEJORADO */
+  /* TANQUE 3D ULTRA MEJORADO - CORREGIDO */
   .tankWrap{
     position:relative; 
-    width:clamp(140px, 26vw, 190px); 
+    width:clamp(140px, 26vw, 180px); /* CORREGIDO: reducir max-width */
     padding-left:56px;
     perspective: 1000px;
   }
@@ -432,20 +436,20 @@
     50% { opacity: 0.6; transform: skewX(-8deg) translateX(12px); }
   }
 
-  /* LÍQUIDO 3D ULTRA MEJORADO */
+  /* LÍQUIDO 3D ULTRA MEJORADO - CORREGIDO */
   .liquid{
     position:absolute; 
     left:3px; 
     right:3px; 
     bottom:3px; 
     height:0%; 
-    background: var(--liquid-base);
+    background: var(--fill, #2aa8ff) !important; /* CORREGIDO: forzar color */
     border-radius:18px 18px 14px 14px / 20px 20px 14px 14px; 
     box-shadow:
       inset 0 15px 35px rgba(255,255,255,.35), 
       inset 0 -12px 25px rgba(0,0,0,.5),
       inset 0 0 20px rgba(0,0,0,.3),
-      0 0 15px rgba(var(--fill), 0.4);
+      0 0 15px var(--fill, rgba(42,168,255,0.4));
     overflow:hidden;
     transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1);
     transform-style: preserve-3d;
@@ -530,16 +534,13 @@
     backdrop-filter: blur(8px);
   }
 
-  /* INFO DEL TANQUE 3D MEJORADA */
+  /* INFO DEL TANQUE 3D MEJORADA - CORREGIDA */
   .name{
     font-weight:700; 
     font-size:clamp(14px,1.6vw,16px);
-    background: linear-gradient(135deg, var(--text), var(--accent));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    text-shadow: 0 2px 8px rgba(0,0,0,.3);
-    margin-bottom: 6px;
+    color:var(--text) !important; /* CORREGIDO: color forzado */
+    margin-bottom:8px; /* CORREGIDO: más margen */
+    text-shadow: 0 2px 8px rgba(0,0,0,.8); /* Mejor sombra */
   }
 
   .status{
@@ -548,6 +549,7 @@
     gap:8px;
     font-size:12px;
     font-weight:600;
+    margin-bottom:12px; /* NUEVO: margen inferior */
   }
 
   .dot{
@@ -586,11 +588,11 @@
     50% { opacity: 0.7; transform: scale(1.1); }
   }
 
-  /* SPARKLINE 3D MEJORADO */
+  /* SPARKLINE 3D MEJORADO - CORREGIDO */
   .spark{
     width:100%;
-    height:42px;
-    margin: 12px 0;
+    height:32px; /* CORREGIDO: reducir altura */
+    margin: 8px 0; /* CORREGIDO: reducir margen */
     border-radius: 8px;
     background: linear-gradient(135deg, 
       rgba(255,255,255,0.02), 
@@ -598,14 +600,15 @@
     box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
   }
 
-  /* KV PAIRS 3D MEJORADOS */
+  /* KV PAIRS 3D MEJORADOS - CORREGIDOS */
   .kv{
     display:grid;
-    grid-template-columns:auto auto;
-    gap:8px 20px;
-    margin-top:12px;
+    grid-template-columns:auto 1fr; /* CORREGIDO: 1fr en lugar de auto */
+    gap:6px 16px;
+    margin-top:0px; /* CORREGIDO: eliminar margin-top */
     font-size:12px;
     color:var(--muted);
+    max-width:100%; /* NUEVO: evitar overflow */
   }
 
   .kv strong{
@@ -642,39 +645,51 @@
 
   .tchip strong{margin-left:2px}
 
-  /* SECCIONES MEJORADAS */
+  /* SECCIONES MEJORADAS - CORREGIDAS */
   .almacenSection{
-    margin:14px 16px; 
-    padding:12px; 
-    background:linear-gradient(180deg,#101f2e,#0c1a28); 
-    border:1px solid var(--line); 
-    border-radius:16px;
+    margin:24px 0; /* CORREGIDO: más margen */
+    padding:0;
+    background:transparent;
+    border:none;
   }
 
   .almacenTitle{
-    font-size:16px; 
+    font-size:18px; 
     font-weight:700; 
-    margin:0 0 8px 0; 
-    color:#e7eef6;
+    margin:0 0 16px 0; 
+    color:#ffffff !important; /* CORREGIDO: color blanco forzado */
+    background: linear-gradient(135deg, #0e1520, #1a2332);
+    padding:16px 24px; /* CORREGIDO: más padding */
+    border-radius:12px;
+    border-left:4px solid #2aa8ff;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.8); /* NUEVO: sombra de texto */
+    letter-spacing:-0.01em;
   }
 
   .tanks-grid {
     display: grid !important;
     grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)) !important;
     gap: 24px !important;
-    padding: 0 !important;
+    padding: 0 24px !important; /* CORREGIDO: padding lateral */
   }
 
+  /* MODO "VER TODOS" - CORREGIDO */
   #grid.show-all-mode {
     display: block !important;
     padding: 0 !important;
   }
 
+  /* MODO INDIVIDUAL - CORREGIDO */
   #grid:not(.show-all-mode) {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-    gap: 24px;
-    padding: 20px 24px;
+    display: grid !important; /* CORREGIDO: forzar grid */
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)) !important;
+    gap: 24px !important;
+    padding: 20px 24px !important;
+  }
+
+  /* Asegurar que las secciones no aparezcan en modo individual */
+  #grid:not(.show-all-mode) .almacenSection {
+    display: none !important;
   }
 
   /* PANEL HISTÓRICO MEJORADO */
@@ -766,7 +781,34 @@
   }
 
   /* RESPONSIVE MEJORADO */
+  @media (max-width: 1200px) {
+    .h-inner {
+      gap: 8px;
+    }
+    
+    .title {
+      font-size: 15px;
+      min-width: 150px;
+    }
+    
+    .ctrls button, .ctrls select {
+      padding: 8px 12px;
+      font-size: 12px;
+    }
+  }
+
   @media (max-width: 768px) {
+    .h-inner {
+      flex-wrap: wrap; /* Permitir wrap solo en móvil */
+      min-height: auto;
+    }
+    
+    .ctrls {
+      width: 100%;
+      justify-content: center;
+      margin-top: 8px;
+    }
+
     .grid {
       grid-template-columns: 1fr;
       gap: 20px;
@@ -783,8 +825,9 @@
       padding-left: 48px;
     }
     
-    .card:hover {
-      transform: translateY(-4px) rotateX(1deg);
+    .tanks-grid {
+      grid-template-columns: 1fr !important;
+      padding: 0 16px !important;
     }
   }
 
