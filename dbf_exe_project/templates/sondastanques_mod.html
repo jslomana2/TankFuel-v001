@@ -294,10 +294,10 @@
               nombre: tank.nombre || `TANQUE ${tank.codigo}`,
               articulo_nombre: tank.articulo_nombre || `ART-${tank.articulo}`,
               producto: tank.articulo_nombre || `ART-${tank.articulo}`,
-              // CORREGIDO: Priorizar colorRGB que viene del COLORPRODU
-              color: tank.colorRGB || tank.colorProducto || tank.color || '#2563eb',
-              colorProducto: tank.colorRGB || tank.colorProducto || tank.color || '#2563eb',
-              colorRGB: tank.colorRGB || tank.colorProducto || tank.color || '#2563eb',
+              // CORREGIDO: Asegurar que colorRGB llegue correctamente
+              color: tank.colorRGB || tank.color || tank.colorProducto || '#2563eb',
+              colorProducto: tank.colorRGB || tank.color || tank.colorProducto || '#2563eb', 
+              colorRGB: tank.colorRGB || tank.color || tank.colorProducto || '#2563eb',
               capacidad: tank.capacidad,
               volumen: tank.volumen,
               temperatura: tank.temperatura,
