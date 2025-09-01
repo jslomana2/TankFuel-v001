@@ -1,4 +1,4 @@
-/*! sondastanques_patch.js — TankFuel PATCH v001b (force fill gradient) */
+/*! sondastanques_patch.js — TankFuel PATCH v001c (force gradient + stop movement) */
 (function(){
   function cssVar(name, fallback){
     try{ const v = getComputedStyle(document.documentElement).getPropertyValue(name);
@@ -41,17 +41,28 @@
     const fill = card.querySelector('.liquid, .tank-fill');
     if(!tank || !fill) return;
     const p = Math.max(0, Math.min(100, Number(percent)||0));
+
     try{
       tank.style.filter='none';
       fill.style.filter='none';
+      fill.style.transition='none';
+      fill.style.animation='none';
       fill.style.transform='translateZ(0)';
       fill.style.imageRendering='-webkit-optimize-contrast';
+      fill.style.backfaceVisibility='hidden';
     }catch(e){}
+
     fill.style.height = p + '%';
-    const color = colorForPercent(p);
-    // Fuerza explícitamente el gradiente a usar el color por %
+
+    const color = (function(p){
+      if (p <= 20) return getComputedStyle(document.documentElement).getPropertyValue('--bad').trim() || '#ff3b30';
+      if (p <= 50) return getComputedStyle(document.documentElement).getPropertyValue('--warn').trim() || '#ffa500';
+      if (p <= 90) return getComputedStyle(document.documentElement).getPropertyValue('--good').trim() || '#00cc44';
+      return getComputedStyle(document.documentElement).getPropertyValue('--brand-2').trim() || '#66ff99';
+    })(p);
+
     fill.style.setProperty('--tank-color', color);
-    fill.style.backgroundImage = gradientFor(color);
+    fill.style.backgroundImage = `linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.02) 10%, ${color} 12%)`;
     fill.style.backgroundColor = color;
   }
   function scanAndPaint(){
