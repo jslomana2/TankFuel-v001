@@ -140,7 +140,7 @@ def _almacenes_all():
         return rows
     except Exception as e:
         log.error(f"Error cargando almacenes: {e}")
-        return cache.get(cache_key, [])
+        return (cache.get(cache_key) or [])
 
 def _articulos():
     filepath = os.path.join(base_dir(), "FFARTI.DBF")
@@ -169,7 +169,7 @@ def _articulos():
         return out
     except Exception as e:
         log.error(f"Error cargando artículos: {e}")
-        return cache.get(cache_key, {})
+        return (cache.get(cache_key) or {})
 
 def _tanques_all():
     filepath = os.path.join(base_dir(), "FFTANQ.DBF")
@@ -207,7 +207,7 @@ def _tanques_all():
         return rows
     except Exception as e:
         log.error(f"Error cargando tanques: {e}")
-        return cache.get(cache_key, [])
+        return (cache.get(cache_key) or [])
 
 def _preload_latest_only():
     """ULTRA-RÁPIDO OPTIMIZADO: Solo última lectura de cada tanque"""
@@ -278,7 +278,7 @@ def _preload_latest_only():
         
     except Exception as e:
         log.error(f"Error en carga optimizada: {e}")
-        return cache.get(cache_key, {})
+        return (cache.get(cache_key) or {})
 
 @app.route("/")
 def home():
