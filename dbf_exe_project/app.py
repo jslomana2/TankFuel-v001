@@ -89,15 +89,27 @@ def _format_datetime(dt):
     except:
         return None
 
+# FUNCIÓN CORREGIDA PARA COLORES NÍTIDOS
 def _color_hex_from_colorref(n):
     try:
         v = int(float(n)) & 0xFFFFFF
         r = v & 0xFF
         g = (v >> 8) & 0xFF
         b = (v >> 16) & 0xFF
+        
+        # CORREGIDO: Evitar colores muy claros o grises que se ven borrosos
+        if (r > 220 and g > 220 and b > 220) or (abs(r-g) < 30 and abs(g-b) < 30 and abs(r-b) < 30):
+            # Si es muy claro o muy gris, usar un color más vibrante basado en el valor original
+            if v < 5000000:  # Valores bajos -> azul
+                return "#2563eb"
+            elif v < 10000000:  # Valores medios -> verde
+                return "#059669" 
+            else:  # Valores altos -> naranja
+                return "#ea580c"
+        
         return f"#{r:02X}{g:02X}{b:02X}"
     except:
-        return "#CCCCCC"
+        return "#2563eb"  # Azul vibrante por defecto
 
 def _norm(s):
     s = ("" if s is None else str(s)).strip()
@@ -142,11 +154,16 @@ def _articulos():
         out = {
             str(r.get("CODIGO")): {
                 "nombre": str(r.get("DESCRI") or ""), 
-                "color": _color_hex_from_colorref(r.get("COLORPRODU"))
+                "color": _color_hex_from_colorref(r.get("COLORPRODU"))  # USAR FUNCIÓN CORREGIDA
             }
             for r in DBF(filepath, ignore_missing_memofile=True, recfactory=dict, char_decode_errors='ignore')
             if r.get("CODIGO")
         }
+        
+        # DEBUG: Mostrar algunos colores para verificar
+        for codigo, data in list(out.items())[:5]:
+            log.info(f"Artículo {codigo}: color={data['color']}, nombre={data['nombre']}")
+            
         cache.set(cache_key, filepath, out)
         log.info(f"Artículos: {len(out)} en {time.time()-t0:.3f}s")
         return out
@@ -290,7 +307,7 @@ def api_almacenes_fast():
             if not calado:
                 continue
                 
-            a = art.get(t["articulo"], {"nombre": None, "color": "#CCCCCC"})
+            a = art.get(t["articulo"], {"nombre": None, "color": "#2563eb"})  # CORREGIDO: Color por defecto más vibrante
             
             tanque_data = {
                 "almacen": canon_by_key.get(alma_key, alma_key),
@@ -307,7 +324,7 @@ def api_almacenes_fast():
                 "fecha_ultimo_calado": calado["fecha_ultimo_calado"],
                 "status": "ok",
                 "spark": [calado["volumen"]],
-                "color": a["color"],
+                "color": a["color"],  # ESTE COLOR VIENE DEL CAMPO COLORPRODU
                 "colorProducto": a["color"],
                 "colorRGB": a["color"]
             }
@@ -325,7 +342,7 @@ def api_almacenes_fast():
             result.append({
                 "codigo": canon,
                 "id": canon, 
-                "nombre": f"{canon} – {nombre}",
+                "nombre": f"{canon} — {nombre}",
                 "poblacion": nombre,
                 "tanques": tanques_list
             })
