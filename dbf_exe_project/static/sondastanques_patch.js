@@ -1,8 +1,4 @@
-/*! sondastanques_patch.js — TankFuel PATCH v001
- *  Cárgalo DESPUÉS de tu sondastanques_mod.js original.
- *  No renderiza nada; solo añade nitidez y color al líquido.
- *  Seguro incluso si window.setData no existe.
- */
+/*! sondastanques_patch.js — TankFuel PATCH v001b (force fill gradient) */
 (function(){
   function cssVar(name, fallback){
     try{ const v = getComputedStyle(document.documentElement).getPropertyValue(name);
@@ -13,6 +9,9 @@
     if (p <= 50) return cssVar('--warn','#ffa500');
     if (p <= 90) return cssVar('--good','#00cc44');
     return cssVar('--brand-2','#66ff99');
+  }
+  function gradientFor(color){
+    return `linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.02) 10%, ${color} 12%)`;
   }
   function guessPercent(card){
     const pctNode = card.querySelector('[data-percent]');
@@ -50,11 +49,10 @@
     }catch(e){}
     fill.style.height = p + '%';
     const color = colorForPercent(p);
+    // Fuerza explícitamente el gradiente a usar el color por %
     fill.style.setProperty('--tank-color', color);
-    const currentBg = getComputedStyle(fill).backgroundImage || '';
-    if(!currentBg || currentBg.indexOf('linear-gradient') === -1){
-      fill.style.background = color;
-    }
+    fill.style.backgroundImage = gradientFor(color);
+    fill.style.backgroundColor = color;
   }
   function scanAndPaint(){
     document.querySelectorAll('.tank-card, .card').forEach(card=>{
