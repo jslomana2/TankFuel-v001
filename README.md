@@ -1,35 +1,83 @@
-# PROCONSI – Tanques (Vista avanzada) — Estado por porcentaje
+# PROCONSI · TankFuel v001
 
-Este paquete parte del **ZIP funcional** que nos enviaste y añade una mejora:
-el **estado junto al nombre del tanque** (círculo + texto) ahora se calcula por **porcentaje de llenado**:
+Demo avanzada de monitorización de tanques (Fuelsoft → Web Flask).  
+Proyecto preparado para empaquetar en **EXE Windows** con **PyInstaller** y distribución vía **GitHub Actions**.
 
-- **Alto** (círculo verde) cuando **> 70%**
-- **Medio** (círculo amarillo) cuando **21% – 69%**
-- **Bajo** (círculo rojo) cuando **≤ 20%**
+---
 
-## Qué he modificado
+## 🚀 Características principales
 
-1. `sondastanques_mod.js`  
-   - Eliminado el uso de `t.status` para el chip del estado visual.
-   - Añadida lógica local: calcula el % (si no existe `pct`), decide el nivel y aplica **color** y **texto** dinámicos.
-2. `sondastanques_mod.html`  
-   - Leyenda del pie actualizada a **Alto / Medio / Bajo**.
-   - Añadido **cache-busting** al script: `sondastanques_mod.js?v=20250827-4` para forzar recarga del navegador.
+- **Flask backend** con APIs ultra-rápidas para datos de tanques.
+- **Lectura directa de DBF** (`FFALMA`, `FFARTI`, `FFTANQ`, `FFCALA`).
+- **UI avanzada** en HTML + JS + CSS (`templates/sondastanques_mod.html`).
+- **Dashboard de tanques** con:
+  - Colores propios por producto (Gasóleo A/B/C, AdBlue, Gasolina, etc.).
+  - Estado dinámico según % de llenado (⚠ Bajo, Medio, Alto, Top).
+  - Selector de almacenes (multi-sede).
+  - Auto-refresco en tiempo real.
+- **Caché persistente** → arranques casi instantáneos si DBFs no cambian.
 
-> ⚠️ No se han tocado ni estructura ni estilos fuera de lo anterior. El resto del proyecto queda **tal cual**.
+---
 
-## Cómo desplegar
+## 📂 Estructura del proyecto
 
-1. Copia los archivos de este ZIP **encima** de tu proyecto actual (respeta rutas/estructura).
-2. Abre la vista en el navegador y fuerza recarga: **Ctrl + F5** (o vacía caché).
-3. Comprueba en DevTools (F12 → Elements/Sources) que el `<script>` carga con `?v=20250827-4`.
+```
+dbf_exe_project/
+│── app.py                   # Servidor Flask (backend)
+│── requirements.txt         # Dependencias Python
+│── static/
+│   ├── sondastanques_mod.css
+│   └── sondastanques_mod.js
+│── templates/
+│   └── sondastanques_mod.html
+│── README.md
+```
 
-## Verificación rápida
+---
 
-- Localiza una tarjeta con % alto/bajo y verifica que el **texto** y el **círculo** cambian entre **Alto / Medio / Bajo** según el %.
-- La leyenda del pie debe mostrar **Alto, Medio, Bajo, Agua**.
+## ⚙️ Instalación y uso
 
-## Notas
+1. Instalar dependencias:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-- Si en el futuro quieres volver a usar estados ajenos al % (por ejemplo, alarmas de sensor), podemos combinar ambos
-  (p.ej., mostrar un **icono extra** o un **borde** de tarjeta) sin perder esta lectura por porcentaje.
+2. Ejecutar en local:
+   ```bash
+   python app.py
+   ```
+   → Servidor en `http://127.0.0.1:5000`
+
+3. Para compilar EXE (Windows):
+   ```bash
+   pyinstaller --onefile app.py
+   ```
+
+---
+
+## 🔗 Endpoints disponibles
+
+- `GET /api/almacenes` → Lista de almacenes + tanques + últimas lecturas.
+- `GET /api/tanque_historico?almacen=&tanque=` → Histórico de un tanque.
+- `GET /api/status` → Estado de refresco (usado en autorefresco UI).
+
+> **Nota**: Los DBF (`FFALMA`, `FFARTI`, `FFTANQ`, `FFCALA`) deben estar en la **misma carpeta que el EXE**.
+
+---
+
+## 🆕 Mejoras recientes
+
+- ✅ **Fix**: Los tanques ya no desaparecen si no tienen calado reciente → se muestran con 0 L.  
+- ✅ **Fix**: Colores por producto normalizados (`#RRGGBB`, valores numéricos o con espacios).  
+- ✅ **Fix**: Alineado del círculo/⚠ en el status.  
+- ⚡ **Optimizaciones**:  
+  - Preload ultra-rápido de FFCALA (últimas lecturas).  
+  - Caché persistente en disco → arranques instantáneos si los DBF no cambian.
+
+---
+
+## 👨‍💻 Autor
+
+Proyecto interno **PROCONSI Fuelsoft** · Técnico: Javier Delgado Llamas.
+
+---
