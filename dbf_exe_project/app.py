@@ -210,30 +210,33 @@ def _tanques_all():
         return cache.get(cache_key, [])
 
 def _preload_latest_only():
-    """ULTRA-RÁPIDO: Solo última lectura de cada tanque"""
+    """ULTRA-RÁPIDO OPTIMIZADO: Solo última lectura de cada tanque"""
     filepath = os.path.join(base_dir(), "FFCALA.DBF")
     cache_key = "ffcala_latest_only"
     
-    if not cache.should_reload(cache_key, filepath, max_age_seconds=60):  # 1 min cache
+    if not cache.should_reload(cache_key, filepath, max_age_seconds=60):
         return cache.get(cache_key)
     
     t0 = time.time()
     
     try:
-        log.info("ULTRA-RÁPIDO: Solo últimas lecturas...")
+        log.info("ULTRA-RÁPIDO OPTIMIZADO: Solo últimas lecturas...")
         
-        # Solo leer últimos 7 días para máxima velocidad
-        fecha_limite = datetime.now() - timedelta(days=7)
-        
-        # Diccionario para guardar solo la más reciente por tanque
+        # OPTIMIZACIÓN: Solo 1 día en lugar de 7 para máxima velocidad
+        fecha_limite = datetime.now() - timedelta(days=1)
         latest_by_tanque = {}
-        
         registros_procesados = 0
         
-        for r in DBF(filepath, ignore_missing_memofile=True, recfactory=dict, char_decode_errors='ignore'):
+        # OPTIMIZACIÓN: Leer en orden inverso (más recientes primero)
+        dbf_records = list(DBF(filepath, ignore_missing_memofile=True, recfactory=dict, char_decode_errors='ignore'))
+        
+        for r in reversed(dbf_records):  # Empezar por los más recientes
             registros_procesados += 1
             
-            # Filtro ultra-temprano
+            # OPTIMIZACIÓN: Salir si ya tenemos todos los tanques únicos
+            if len(latest_by_tanque) >= 50:  # Máximo realista
+                break
+                
             fecha = r.get("FECHA")
             if fecha and fecha < fecha_limite.date():
                 continue
@@ -244,36 +247,37 @@ def _preload_latest_only():
             if not almaKey or not tanq:
                 continue
                 
+            tanque_key = f"{almaKey}_{tanq}"
+            
+            # OPTIMIZACIÓN CLAVE: Si ya tenemos este tanque, seguir al siguiente
+            if tanque_key in latest_by_tanque:
+                continue
+                
             dt = _dt(fecha, r.get("HORA"))
             if dt is None: 
                 continue
             
-            tanque_key = f"{almaKey}_{tanq}"
+            litros = _f(r.get("LITROS"))
+            litros15 = _f(r.get("LITROS15"))
+            temperatura = _f(r.get("TEMPERA"))
             
-            # Solo guardar si es más reciente que la actual
-            current = latest_by_tanque.get(tanque_key)
-            if current is None or dt > current["dt"]:
-                litros = _f(r.get("LITROS"))
-                litros15 = _f(r.get("LITROS15"))
-                temperatura = _f(r.get("TEMPERA"))
-                
-                if litros is not None and litros15 is not None:
-                    latest_by_tanque[tanque_key] = {
-                        "volumen": round(litros), 
-                        "litros15": round(litros15), 
-                        "temperatura": temperatura or 0, 
-                        "dt": dt,
-                        "fecha_ultimo_calado": _format_datetime(dt)
-                    }
+            if litros is not None and litros15 is not None:
+                latest_by_tanque[tanque_key] = {
+                    "volumen": round(litros), 
+                    "litros15": round(litros15), 
+                    "temperatura": temperatura or 0, 
+                    "dt": dt,
+                    "fecha_ultimo_calado": _format_datetime(dt)
+                }
         
         elapsed = time.time() - t0
-        log.info(f"ULTRA-RÁPIDO: {registros_procesados:,} registros leídos, {len(latest_by_tanque)} tanques válidos en {elapsed:.3f}s")
+        log.info(f"ULTRA-RÁPIDO OPTIMIZADO: {registros_procesados:,} procesados, {len(latest_by_tanque)} tanques únicos en {elapsed:.3f}s")
         
         cache.set(cache_key, filepath, latest_by_tanque)
         return latest_by_tanque
         
     except Exception as e:
-        log.error(f"Error en carga ultra-rápida: {e}")
+        log.error(f"Error en carga optimizada: {e}")
         return cache.get(cache_key, {})
 
 @app.route("/")
