@@ -195,7 +195,7 @@ function upsertCard(a,t,grid){
     
     // OPTIMIZADO: Aplicar color de forma eficiente
     if(ref.last.color !== col) {
-      p.liquid.style.background = col;
+      p.liquid.style.background = col; p.liquid.style.setProperty('--fill', col);
       p.liquid.style.opacity = "0.9";
       ref.last.color=col;
     }
@@ -329,28 +329,15 @@ function nivelFromPct(p){ p = Math.max(0, Math.min(100, Math.round(p||0))); retu
 function nivelColorFromPct(p){ p = Math.max(0, Math.min(100, Math.round(p||0))); return (p>=91)?"#4ade80":(p>=51)?"#16a34a":(p>=21)?"#f59e0b":"#ef4444"; }
 
 // FUNCIÓN colorFrom CORREGIDA PARA RESPETAR COLORES DEL ARCHIVO
-function colorFrom(v){ 
+function colorFrom(v){
   if(v===undefined||v===null) return "#2563eb";
-  if(typeof v!=="string") v = String(v);
-  v = v.trim();
-  // Normalize like '#RRGGBB'
-  var m = /^(?:#)?([0-9a-fA-F]{6})$/.exec(v);
-  if(m){ v = "#"+m[1].toUpperCase(); }
-
-  if(typeof v==="string" && v && v !== "#CCCCCC" && v !== "#1987ff" && v !== "undefined" && v !== "null") {
-    var rgb = hexToRgb(v);
-    if(rgb && (rgb.r > 220 && rgb.g > 220 && rgb.b > 220)) {
-      return "#2563eb";
-    }
-    return v; 
-  }
-  if(typeof v==="number"){ 
-    var r=(v&255),g=(v>>8)&255,b=(v>>16)&255; 
-    if(r > 220 && g > 220 && b > 220) {
-      return "#2563eb";
-    }
-    return "#"+toHex(r)+toHex(g)+toHex(b);
-  } 
+  var s = String(v).trim();
+  // Hex normalizado
+  var m = /^(?:#)?([0-9a-fA-F]{6})$/.exec(s);
+  if(m){ return ("#"+m[1].toUpperCase()); }
+  // Número ColorRef (BGR)
+  if(!isNaN(Number(s))){ var n = (Number(s)) & 0xFFFFFF; var r=n&255,g=(n>>8)&255,b=(n>>16)&255; return "#"+toHex(r)+toHex(g)+toHex(b); }
+  // Fallback
   return "#2563eb";
 }
 

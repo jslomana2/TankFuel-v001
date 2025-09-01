@@ -154,7 +154,7 @@ def _articulos():
         out = {
             str(r.get("CODIGO")): {
                 "nombre": str(r.get("DESCRI") or ""), 
-                "color": _color_hex_from_colorref(str(r.get("COLORPRODU") or '').strip())  # USAR FUNCIÓN CORREGIDA
+                "color": _normalize_color(r.get("COLORPRODU"))
             }
             for r in DBF(filepath, ignore_missing_memofile=True, recfactory=dict, char_decode_errors='ignore')
             if r.get("CODIGO")
@@ -309,7 +309,12 @@ def api_almacenes_fast():
             
             calado = latest_by_tanque.get(tanque_key)
             if not calado:
-                continue
+                calado = {
+                    'volumen': 0.0,
+                    'litros15': 0.0,
+                    'temperatura': None,
+                    'fecha_ultimo_calado': None
+                }
                 
             a = art.get(t["articulo"], {"nombre": None, "color": "#2563eb"})  # CORREGIDO: Color por defecto más vibrante
             
