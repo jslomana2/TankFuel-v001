@@ -861,17 +861,8 @@
   }
 
 
-/* === TankFuel PATCH v001 (non-destructive) ===============================
-   Objetivo: 
-   - Relleno del tanque ('.liquid') nítido, sin borrosidad por filtros heredados
-   - Select/controles legibles en cabecera clara si fuese necesario
-   - Ocultar "cuadros" vacíos (badges/spans sin texto)
-   ======================================================================== */
-
-/* Evitar que filtros externos afecten al líquido u ondas */
+/* === TankFuel PATCH v001 (non-destructive) =============================== */
 .tank, .tank * { filter: none !important; }
-
-/* Nitidez en el líquido */
 .liquid{
   filter: none !important;
   transform: translateZ(0);
@@ -879,17 +870,6 @@
   image-rendering: crisp-edges;
   will-change: height;
 }
-
-/* Mantener ondas sin suavizados excesivos */
-.wave, .wave2, .wave3{
-  transform: translateZ(0);
-}
-
-/* Texto legible en select de cabecera si se usara tema claro */
+.wave, .wave2, .wave3{ transform: translateZ(0); }
 .h-inner .ctrls select#almacenSel{ color:#0b1220; }
-
-/* Ocultar elementos vacíos que dibujan un rectángulo sin texto */
-.badge:empty,
-.almacen-nombre:empty,
-.meta:empty,
-.small-pill:empty{ display:none !important; }
+.badge:empty, .almacen-nombre:empty, .meta:empty, .small-pill:empty{ display:none !important; }
