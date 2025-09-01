@@ -330,6 +330,13 @@ function nivelColorFromPct(p){ p = Math.max(0, Math.min(100, Math.round(p||0)));
 
 // FUNCIÓN colorFrom CORREGIDA PARA RESPETAR COLORES DEL ARCHIVO
 function colorFrom(v){ 
+  if(v===undefined||v===null) return "#2563eb";
+  if(typeof v!=="string") v = String(v);
+  v = v.trim();
+  // Normalize like '#RRGGBB'
+  var m = /^(?:#)?([0-9a-fA-F]{6})$/.exec(v);
+  if(m){ v = "#"+m[1].toUpperCase(); }
+
   if(typeof v==="string" && v && v !== "#CCCCCC" && v !== "#1987ff" && v !== "undefined" && v !== "null") {
     var rgb = hexToRgb(v);
     if(rgb && (rgb.r > 220 && rgb.g > 220 && rgb.b > 220)) {

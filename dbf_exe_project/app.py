@@ -154,7 +154,7 @@ def _articulos():
         out = {
             str(r.get("CODIGO")): {
                 "nombre": str(r.get("DESCRI") or ""), 
-                "color": _color_hex_from_colorref(r.get("COLORPRODU"))  # USAR FUNCIÓN CORREGIDA
+                "color": _color_hex_from_colorref(str(r.get("COLORPRODU") or '').strip())  # USAR FUNCIÓN CORREGIDA
             }
             for r in DBF(filepath, ignore_missing_memofile=True, recfactory=dict, char_decode_errors='ignore')
             if r.get("CODIGO")

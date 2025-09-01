@@ -631,3 +631,19 @@ footer{
   .pill{ border:0; background:#eee; color:#222; }
   #histChart{ height:300px }
 }
+
+
+/* FIX: Legibility of select & buttons on light header */
+header select, header button{
+  color: var(--bg-deep) !important;
+  background: rgba(255,255,255,0.9) !important;
+  border-color: rgba(148,163,184,0.45) !important;
+}
+
+/* FIX: Status circle alignment */
+.status{ line-height: 1; align-items: center; }
+.status .dot, .status .warnIcon{
+  display:inline-block; vertical-align:middle;
+}
+.status .dot{ width:10px; height:10px; margin-top:0; }
+.status .warnIcon{ line-height:1; transform: translateY(0); }
